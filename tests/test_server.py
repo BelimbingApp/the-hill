@@ -61,6 +61,34 @@ class BoardStateTest(unittest.TestCase):
             b.refresh_once()
         self.assertIsNone(b.state()["last_error"])
 
+    def test_age_is_measured_from_when_the_pass_started_reading(self):
+        # A pass takes about a hundred seconds. Measuring from when it finished
+        # storing makes the data look that much fresher than it is, and
+        # disagrees with the timestamp the page prints in its masthead. The age
+        # must never flatter itself.
+        started = "2026-09-12T11:33:59+00:00"
+        b = self.board()
+        with mock.patch.object(server.collect, "collect",
+                               return_value={"collected_at": started}):
+            b.refresh_once()
+        st = b.state()
+        self.assertEqual(st["collected_at"], started)
+        self.assertGreater(st["age_seconds"], 60,
+                           "age must reflect the snapshot's own stamp, not the store time")
+        # The store time is still reported, just not as the age anchor.
+        self.assertIsNotNone(st["stored_at"])
+        self.assertNotEqual(st["stored_at"], st["collected_at"])
+
+    def test_a_snapshot_with_no_usable_stamp_falls_back_to_the_store_time(self):
+        for snap in ({}, {"collected_at": "not-a-date"}):
+            with self.subTest(snap=snap):
+                b = self.board()
+                with mock.patch.object(server.collect, "collect", return_value=snap):
+                    b.refresh_once()
+                st = b.state()
+                self.assertIsNotNone(st["collected_at"])
+                self.assertLess(st["age_seconds"], 5)
+
     def test_the_refresh_interval_has_a_floor(self):
         # A one-second interval would hammer the GitHub API on every tick and
         # spend the shared quota every agent on the account is drawing from.

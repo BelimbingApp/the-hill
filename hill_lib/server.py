@@ -48,16 +48,26 @@ class Board:
         self._lock = threading.Lock()
         self._snapshot: dict | None = None
         self._collected_at: datetime.datetime | None = None
+        self._started_at: datetime.datetime | None = None
         self._collecting = False
         self._error: str | None = None
         self._stop = threading.Event()
 
     def state(self) -> dict:
         with self._lock:
-            age = (_now() - self._collected_at).total_seconds() if self._collected_at else None
+            # Age from when the pass STARTED reading, not when it finished
+            # storing. collect() stamps its own collected_at on entry, and a
+            # pass takes roughly a hundred seconds, so measuring from the
+            # finish time makes the data look a hundred seconds fresher than
+            # it is -- and disagrees with the timestamp the masthead prints.
+            # An age that flatters itself is the one failure this board must
+            # not have, so it anchors on the oldest defensible moment.
+            anchor = self._started_at or self._collected_at
+            age = (_now() - anchor).total_seconds() if anchor else None
             return {
                 "snapshot": self._snapshot,
-                "collected_at": self._collected_at.isoformat() if self._collected_at else None,
+                "collected_at": anchor.isoformat() if anchor else None,
+                "stored_at": self._collected_at.isoformat() if self._collected_at else None,
                 "age_seconds": age,
                 "collecting": self._collecting,
                 "interval_seconds": self.interval,
@@ -77,9 +87,17 @@ class Board:
                 self._error = f"{type(exc).__name__}: {exc}"[:200]
                 self._collecting = False
             return
+        stamped = snap.get("collected_at") if isinstance(snap, dict) else None
+        started = None
+        if isinstance(stamped, str):
+            try:
+                started = datetime.datetime.fromisoformat(stamped)
+            except ValueError:
+                started = None
         with self._lock:
             self._snapshot = snap
             self._collected_at = _now()
+            self._started_at = started
             self._error = None
             self._collecting = False
 
