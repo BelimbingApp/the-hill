@@ -197,8 +197,15 @@ hill serve                                  # http://localhost:8787
 hill serve --port 9000 --interval 120       # pick a port, refresh more often
 ```
 
-A live app. Open it on a spare screen and leave it. It repaints itself every
-ten seconds and re-collects from GitHub every five minutes by default.
+A live app. Open it on a spare screen and leave it. The page repaints every
+ten seconds; a fresh collection starts every five minutes by default.
+
+`--interval` is the time between the **starts** of two collections, not the
+gap after one finishes. A pass takes about 108 seconds, so the two readings
+differ by more than they sound: measured on the running board, waiting the
+interval after each pass gave a real period of 408 seconds for a 300 second
+setting. If a pass ever runs longer than the interval, the next one starts
+immediately rather than queueing up behind it.
 
 Three things it does deliberately:
 

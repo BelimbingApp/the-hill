@@ -102,9 +102,20 @@ class Board:
             self._collecting = False
 
     def run(self) -> None:
+        # The interval is the time between the STARTS of two passes, which is
+        # what someone setting --interval 300 means by it. Waiting the full
+        # interval after each pass finished instead made the real period
+        # interval + collection time: measured at 408s for a 300s setting,
+        # because a pass takes about 108s. Small, and in the wrong direction --
+        # the board refreshed less often than it said it did.
+        #
+        # A pass slower than the interval simply starts the next one straight
+        # away rather than queueing up passes behind each other.
         while not self._stop.is_set():
+            started = _now()
             self.refresh_once()
-            self._stop.wait(self.interval)
+            elapsed = (_now() - started).total_seconds()
+            self._stop.wait(max(0.0, self.interval - elapsed))
 
     def stop(self) -> None:
         self._stop.set()

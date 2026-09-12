@@ -89,6 +89,69 @@ class BoardStateTest(unittest.TestCase):
                 self.assertIsNotNone(st["collected_at"])
                 self.assertLess(st["age_seconds"], 5)
 
+    def test_the_interval_is_between_starts_not_after_each_pass(self):
+        # Measured on the running board: starts 408s apart for a 300s interval,
+        # because the wait began after a ~108s pass finished. The board was
+        # refreshing less often than it claimed.
+        waits = []
+        b = self.board(interval=300)
+
+        class FakeStop:
+            def __init__(self): self.n = 0
+            def is_set(self): return self.n > 1
+            def wait(self, t): waits.append(t); self.n += 1
+            def set(self): self.n = 99
+
+        b._stop = FakeStop()
+        slow = {"collected_at": None}
+
+        def collect_slowly():
+            # advance the clock inside the pass, as a real collection does
+            base = server._now()
+            with mock.patch.object(server, "_now", return_value=base):
+                pass
+            return slow
+
+        with mock.patch.object(server.collect, "collect", side_effect=lambda: slow):
+            with mock.patch.object(server, "_now", side_effect=self.clock(gap=108)):
+                b.run()
+
+        self.assertTrue(waits, "the loop must wait between passes")
+        self.assertLessEqual(waits[0], 300 - 108 + 1,
+                             "wait must be reduced by how long the pass took")
+        self.assertGreater(waits[0], 0)
+
+    @staticmethod
+    def clock(gap):
+        """A clock that advances `gap` seconds each time the pass is timed."""
+        import datetime as _dt
+        base = _dt.datetime(2026, 1, 1, tzinfo=_dt.timezone.utc)
+        seq = [0, gap, gap, gap * 2, gap * 2, gap * 3, gap * 3, gap * 4]
+        it = iter(seq)
+
+        def now():
+            try:
+                return base + _dt.timedelta(seconds=next(it))
+            except StopIteration:
+                return base + _dt.timedelta(seconds=seq[-1])
+        return now
+
+    def test_a_pass_slower_than_the_interval_does_not_wait_a_negative_time(self):
+        b = self.board(interval=60)
+        waits = []
+
+        class FakeStop:
+            def __init__(self): self.n = 0
+            def is_set(self): return self.n > 0
+            def wait(self, t): waits.append(t); self.n += 1
+            def set(self): self.n = 99
+
+        b._stop = FakeStop()
+        with mock.patch.object(server.collect, "collect", return_value={}):
+            with mock.patch.object(server, "_now", side_effect=self.clock(gap=500)):
+                b.run()
+        self.assertEqual(waits, [0.0], "an over-running pass starts the next immediately")
+
     def test_the_refresh_interval_has_a_floor(self):
         # A one-second interval would hammer the GitHub API on every tick and
         # spend the shared quota every agent on the account is drawing from.
