@@ -175,3 +175,41 @@ class LanesTest(unittest.TestCase):
         got = self.lanes({"Owner/a": {"pr": [self.row(9, ["agent:x"]), self.row(2, ["agent:y"])],
                                       "issue": []}})
         self.assertEqual([l["number"] for l in got["held"]], [2, 9])
+
+
+class NoRunControlTest(unittest.TestCase):
+    """the-hill cannot end a run, and that has to stay true by construction.
+
+    A run completes when the mission is accomplished, and only the person who
+    started it may halt it. "Accomplished" is a human judgement: an agent can
+    report progress toward it and must never declare it reached. The cheapest
+    durable guarantee is that no code path here can close or reopen the board
+    issue at all, so this asserts the absence rather than trusting the habit.
+    """
+
+    def sources(self):
+        import pathlib
+        root = pathlib.Path(__file__).resolve().parent.parent
+        files = list((root / "hill_lib").glob("*.py")) + [root / "hill"]
+        return {f: f.read_text(encoding="utf-8") for f in files}
+
+    def test_nothing_closes_or_reopens_an_issue(self):
+        import re
+        # Write verbs only. An earlier version of this guard also matched
+        # `--state open`, which is the read filter on `gh pr list` -- it failed
+        # on honest code, and a guard that cries wolf gets deleted.
+        forbidden = re.compile(
+            r"""["']issue["']\s*,\s*["'](close|reopen)["']"""      # gh issue close
+            r"""|["']pr["']\s*,\s*["'](close|reopen|merge)["']"""  # gh pr close/merge
+            r"""|--method\s*["']?PATCH"""                            # REST state change
+            r"""|["']-X["']\s*,\s*["']PATCH["']""", re.S)
+        for path, text in self.sources().items():
+            with self.subTest(path=path.name):
+                self.assertIsNone(forbidden.search(text),
+                                  f"{path.name} appears to end a run or land work")
+
+    def test_nothing_edits_the_board_issue_body_or_title(self):
+        for path, text in self.sources().items():
+            with self.subTest(path=path.name):
+                self.assertNotIn("issue edit", text,
+                                 f"{path.name} edits an issue; the run is not ours to rewrite")

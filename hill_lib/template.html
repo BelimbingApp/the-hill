@@ -119,6 +119,18 @@ section{margin-top:38px}
 .chip.stop{color:var(--stop);background:var(--stop-wash)}
 .chip.idle{color:var(--unknown);background:var(--unknown-wash)}
 
+/* Every peer runs the same app and draws the same board. Without this, "31
+   workspaces" and "3 open lanes" look like the same kind of fact; one is this
+   laptop and the other is the whole floor. */
+.scope{font-family:var(--display);text-transform:uppercase;letter-spacing:.07em;
+  font-size:10.5px;font-weight:600;padding:1px 6px;border:1px solid currentColor;
+  margin-left:10px;vertical-align:2px}
+.scope.peer{color:var(--accent-ink);background:var(--accent-wash)}
+.scope.floor{color:var(--muted);background:var(--sunk)}
+.mission{flex-basis:100%;order:3;margin:10px 0 0;font-size:13.5px;color:var(--ink)}
+.mission b{font-weight:600}
+.mission .run{color:var(--muted)}
+
 /* open lanes -------------------------------------------------------------- */
 #lanes tbody tr{cursor:default}
 #lanes td.lane a{font-family:var(--mono);font-size:12.5px;font-weight:600;
@@ -205,6 +217,7 @@ footer code{font-family:var(--mono);color:var(--muted)}
     <div>
       <h1>Hill Floor Board</h1>
       <p class="sub" id="sub">What every lane is waiting on, and since when.</p>
+      <p class="mission" id="mission"></p>
     </div>
     <div class="meta" id="meta"></div>
     <div class="meta"><span class="live" id="live">—</span></div>
@@ -222,7 +235,7 @@ footer code{font-family:var(--mono);color:var(--muted)}
 
   <section id="lanesSec" hidden>
     <div class="head">
-      <h2>Open lanes</h2>
+      <h2>Open lanes<span class="scope floor">the floor</span></h2>
       <span class="note" id="lanesNote"></span>
     </div>
     <div class="tbl" style="max-height:none" id="lanes">
@@ -238,7 +251,7 @@ footer code{font-family:var(--mono);color:var(--muted)}
 
   <section id="crewSec" hidden>
     <div class="head">
-      <h2>Crew and lanes</h2>
+      <h2>Crew and lanes<span class="scope peer">this peer</span></h2>
       <span class="note" id="crewNote"></span>
     </div>
     <div class="tbl" style="max-height:none">
@@ -254,7 +267,7 @@ footer code{font-family:var(--mono);color:var(--muted)}
 
   <section>
     <div class="head">
-      <h2>Deliveries per day</h2>
+      <h2>Deliveries per day<span class="scope floor">the floor</span></h2>
       <span class="note" id="chartNote"></span>
     </div>
     <div class="chart">
@@ -267,13 +280,13 @@ footer code{font-family:var(--mono);color:var(--muted)}
   </section>
 
   <section>
-    <div class="head"><h2>Repositories</h2><span class="note">open lanes · merged in last 24h</span></div>
+    <div class="head"><h2>Repositories<span class="scope floor">the floor</span></h2><span class="note">open lanes · merged in last 24h</span></div>
     <div class="repos" id="repos"></div>
   </section>
 
   <section>
     <div class="head">
-      <h2>Agents</h2>
+      <h2>Agents<span class="scope floor">the floor</span></h2>
       <span class="note">click a row to drill in · sorted by deliveries</span>
     </div>
     <div class="split">
@@ -292,7 +305,7 @@ footer code{font-family:var(--mono);color:var(--muted)}
 
   <section>
     <div class="head">
-      <h2>Workspaces on this machine</h2>
+      <h2>Workspaces<span class="scope peer">this peer</span></h2>
       <span class="note" id="wsNote"></span>
     </div>
     <div class="ws">
@@ -309,7 +322,7 @@ footer code{font-family:var(--mono);color:var(--muted)}
 
   <section>
     <div class="head">
-      <h2>Time and usage</h2>
+      <h2>Time and usage<span class="scope peer">this peer</span></h2>
       <span class="note" id="useNote"></span>
     </div>
     <div class="stats" id="useStats"></div>
@@ -362,6 +375,24 @@ const ago = iso => {
 };
 
 /* masthead + answer -------------------------------------------------------- */
+const R = D.run || {}, P = D.peer || {};
+// The run is the unit: one mission, one run, however many days it takes.
+const runLine = !R.configured
+  ? `<span class="run">no mission configured — showing whatever repositories are set up</span>`
+  : (R.mission
+      ? `<b>${esc(R.mission)}</b> <span class="run">· ${esc(R.board)}` +
+        (R.age_hours != null
+          ? ` · running ${R.age_hours < 48 ? R.age_hours + "h" : Math.round(R.age_hours / 24) + "d"}`
+          : "") +
+        (R.initiator ? ` · started by ${esc(R.initiator)}` : "") +
+        (R.state === "closed" ? " · run closed" : " · runs until the mission is done") +
+        `</span>`
+      : `<span class="run">${esc(R.board)} — ${esc(R.why || "unreadable")}</span>`);
+$("#mission").innerHTML = runLine +
+  (P.host ? ` <span class="run">· peer <b>${esc(P.host)}</b>` +
+            (P.agents && P.agents.length ? ` (${P.agents.map(esc).join(", ")})` : "") +
+            `</span>` : "");
+
 const q = D.quota.github_core || {};
 $("#meta").innerHTML =
   `collected <b>${esc(D.collected_at.replace("T", " ").replace("+00:00", "Z"))}</b><br>` +
@@ -430,7 +461,12 @@ const gb = (D.workspaces.reduce((a, w) => a + (w.size_mb || 0), 0) / 1024).toFix
 const activeAgents = Object.values(D.agents).filter(a => a.merged_24h > 0 || a.accepts + a.changes > 0).length;
 $("#stats").innerHTML = [
   ["Open lanes", openLanes, openLanes ? "awaiting someone" : "nothing in flight"],
-  ["Delivered · 24h", merged24, "pull requests merged"],
+  R.configured && R.started_at
+    ? ["Delivered · this run", Object.values(D.repos).reduce((a, r) => a + (r.merged_run || 0), 0),
+       (Object.values(D.repos).some(r => r.merged_run_truncated) ? "at least — " : "") +
+       `since ${new Date(R.started_at).toISOString().slice(0, 10)}` +
+       (merged24 ? ` · ${merged24} in last 24h` : "")]
+    : ["Delivered · 24h", merged24, "pull requests merged"],
   ["Agents seen", Object.keys(D.agents).length, `${activeAgents} with recent activity`],
   ["Workspaces", D.workspaces.length, `${gb} GB · ${dirty} with uncommitted work`],
 ].map(([k, v, n]) =>

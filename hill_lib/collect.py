@@ -102,18 +102,69 @@ def head_verdict(gh, full, number, sha, author):
     return None
 
 
+def _run() -> dict:
+    """The mission this board is for, read from HILL_BOARD.
+
+    Unset is reported as unset rather than invented: a board with no run is a
+    board showing whatever repositories happen to be configured, and a reader
+    should know that is what they are looking at.
+    """
+    from . import mail
+    board = mail.board()
+    if board is None:
+        return {"configured": False,
+                "why": "HILL_BOARD is not set, so this board is not scoped to a mission"}
+    repo, number = board
+    got = gh(f"repos/{repo}/issues/{number}")
+    if not got:
+        return {"configured": True, "board": f"{repo}#{number}",
+                "why": "the board issue could not be read"}
+    started = got.get("created_at")
+    age_h = None
+    if started:
+        age_h = round((datetime.datetime.now(datetime.timezone.utc)
+                       - datetime.datetime.fromisoformat(started.replace("Z", "+00:00"))
+                       ).total_seconds() / 3600, 1)
+    return {"configured": True, "board": f"{repo}#{number}",
+            "mission": (got.get("title") or "").strip(),
+            "started_at": started, "age_hours": age_h,
+            "state": got.get("state"), "url": got.get("html_url"),
+            # A run ends when the mission is accomplished, and only the person
+            # who started it may halt it. Recorded so the board can name them,
+            # and so nothing here is tempted to decide it has finished.
+            "initiator": ((got.get("user") or {}).get("login")),
+            "ends": "when the mission is accomplished; only the initiator may halt it"}
+
+
 def collect():
     now = datetime.datetime.now(datetime.timezone.utc)
+    # Every peer runs the same app and draws the same board, so a board that
+    # does not say which machine it is is unreadable the moment there are two.
+    # Named first, before anything it measures.
+    from . import db as _dbmod, live as _livemod
     snap = {
+        "peer": {
+            "host": _dbmod.host(),
+            "home": str(_dbmod.HOME),
+            "agents": sorted(a.get("agent") for a in (_livemod.read_all() or [])
+                             if a.get("agent")),
+        },
+        # One mission, one run. The board issue IS the run: its title is the
+        # mission, its creation is the start, and it closes when the run ends.
+        # A run lasts hours or weeks, so "merged today" is the wrong window to
+        # judge it by -- what matters is what has happened since it started.
+        "run": _run(),
         "collected_at": now.isoformat(timespec="seconds"),
         "repos": {}, "agents": {}, "open_lanes": [], "daily": {},
         "workspaces": [], "quota": {}, "coverage": [],
     }
 
     # ---- GitHub: open PRs and recent merges -------------------------------------
+    run_started = (snap.get("run") or {}).get("started_at")
     for full in REPOS:
         short = full.split("/")[1]
-        rec = {"full": full, "open": 0, "merged_24h": 0, "merged_total_seen": 0}
+        rec = {"full": full, "open": 0, "merged_24h": 0, "merged_run": 0,
+               "merged_total_seen": 0}
         opens = gh(f"repos/{full}/pulls?state=open&per_page=100") or []
         rec["open"] = len(opens)
         for pr in opens:
@@ -170,7 +221,19 @@ def collect():
             if not a["last_seen"] or pr["merged_at"] > a["last_seen"]: a["last_seen"] = pr["merged_at"]
             if age <= 86400:
                 rec["merged_24h"] += 1; a["merged_24h"] += 1
+            # A run lasts hours or weeks, so a fixed 24h window says almost
+            # nothing about it. Count what this run has delivered as well.
+            if run_started and pr["merged_at"] >= run_started:
+                rec["merged_run"] = rec.get("merged_run", 0) + 1
+                a["merged_run"] = a.get("merged_run", 0) + 1
         rec["oldest_merge_seen"] = oldest
+        # The closed-PR read is one page of 100. If the oldest merge on that
+        # page is still newer than the run's start, there are older merges this
+        # never saw, and merged_run is a floor rather than a total. Saying 310
+        # when the truth is "at least 310" is the kind of confident wrong number
+        # this board exists not to print.
+        rec["merged_run_truncated"] = bool(
+            run_started and oldest and len(closed) >= 100 and oldest > run_started)
         snap["repos"][short] = rec
 
     # A repo's read is capped at 100 closed PRs, so before its oldest seen merge we
@@ -343,7 +406,9 @@ def collect():
                   "'no verdict' means no non-author verdict is bound to this head, which is not the same as "
                   "the repo requiring one: blb-people-connector installs no gate and requires 0 approvals"},
       {"signal": "merged counts", "checks": "merged_at on the most recent 100 closed PRs per repo",
-       "not_checked": "anything older than that window; unlabelled PRs are grouped, not attributed"},
+       "not_checked": "anything older than that window; unlabelled PRs are grouped, not attributed. "
+                  "Where merged_run_truncated is set the run total is a floor, not a total: the page "
+                  "ran out before reaching the start of the run"},
       {"signal": "verdicts", "checks": "**From:**/**Verdict:** markers on reviews of the 25 most recent merges per repo",
        "not_checked": "verdicts written in other formats — two were missed this way on 2026-09-11"},
       {"signal": "agent last_seen", "checks": "newest merge or verdict timestamp",
