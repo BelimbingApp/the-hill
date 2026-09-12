@@ -30,10 +30,12 @@ human owners             one or more humans; start the mission; only they can ha
 - One agent can hold more than one role. The accountability of each still applies.
 - Prompts are in `docs/roles/`. Paste one at the top of an agent's instructions.
 
-## Two rules for everyone
+## Three rules for everyone
 
 - **Never review your own lane.** Not when CI is green. Not when you are the only one awake. The tool refuses it.
 - **Say what you measured, not what you expect.** If you did not run it, say so.
+- **Read the target repo's own rules before editing it.** `AGENTS.md`, `DESIGN.md`,
+  `.agents/skills/`. Follow their conventions, not yours — especially the UI.
 
 ## One mission, one run
 
@@ -115,6 +117,11 @@ human owners             one or more humans; start the mission; only they can ha
 - Delivery is counted **over the run**, not over a fixed day.
 - Where a number is a floor, not a total, it says "at least".
 - Where a source cannot answer, it says **unknown** — never zero.
+- Built from three files: `template.html`, `board.css`, `board.js`.
+  - Vanilla JavaScript. No framework, no build step, no npm.
+  - Folded into one file when the board is built or served, so a saved board
+    works from `file://` with nothing running.
+  - Saved and served use the same assembly, so they cannot drift apart.
 
 ## Not built yet
 

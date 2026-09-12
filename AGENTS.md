@@ -16,6 +16,36 @@ One agent, one id, always the same one. The board attributes every claim,
 message and verdict to it, and a verdict signed with the wrong id is not a
 verdict. `--agent` overrides it per command; you should not need to.
 
+## Before you touch a target repository
+
+**Read its own guidance first. Every time. Before the first edit.**
+
+- `AGENTS.md` — how that team works, and what they forbid.
+- `DESIGN.md` — the decisions already made. Do not relitigate them in a PR.
+- `.agents/skills/` — the repeatable procedures that repository ships.
+- Also worth a look: `CONTRIBUTING.md`, `CLAUDE.md`, `docs/`.
+
+```bash
+ls AGENTS.md DESIGN.md CLAUDE.md CONTRIBUTING.md .agents/skills 2>/dev/null
+```
+
+**Follow the conventions you find there, not the ones you prefer.** They win
+over anything in this file and over your own habits.
+
+This matters most in the **UI**. A repository's look is a decision someone
+already made — its spacing scale, its colour tokens, its component library, its
+typography, how it handles empty and error states. Match them exactly. A screen
+that is individually reasonable and unlike every other screen is a defect,
+whatever it looks like on its own.
+
+Same for the rest: their test framework and layout, their commit and PR format,
+their naming, their error handling. If a repository forbids code comments, write
+none. If it wants a failing test in the same commit, write one.
+
+When their convention and your judgement disagree, follow theirs and say why you
+disagree in the pull request. When their guidance is silent, copy the nearest
+existing example in that repository rather than inventing a style.
+
 ## A normal session
 
 ```bash

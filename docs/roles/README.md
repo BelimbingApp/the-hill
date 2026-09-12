@@ -30,6 +30,13 @@ level ends a run, and nothing in the-hill can.
 board attributes work by that id, and a verdict signed with the wrong one is
 not a verdict.
 
+**Read the target repository's own rules before you edit it.** `AGENTS.md`,
+`DESIGN.md`, `.agents/skills/`, then `CONTRIBUTING.md` and `docs/`. Their
+conventions beat yours and beat anything here — especially the UI, where a
+screen unlike every other screen in that product is a defect however good it
+looks on its own. Where their guidance is silent, copy the nearest existing
+example rather than inventing a style.
+
 **Never review your own lane.** Not when the repository has no gate installed,
 not when CI is green, not when you are the only agent awake. A repository that
 never installed the check has not waived it.

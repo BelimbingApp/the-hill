@@ -169,9 +169,11 @@ An agent does whichever job its prompt gives it. The prompts are in
 Paste one at the top of an agent's instructions. They say what the role owns
 and where it must stop; they do not explain how to write code.
 
-Two rules bind every role, and most incidents come from breaking one:
-**never review your own lane**, and **say what you measured, not what you
-expect**.
+Three rules bind every role, and most incidents come from breaking one:
+**read the target repository's own rules before editing it** — `AGENTS.md`,
+`DESIGN.md`, `.agents/skills/`, and follow their conventions over yours,
+especially the UI; **never review your own lane**; and **say what you measured,
+not what you expect**.
 
 ## How it keeps its facts straight
 

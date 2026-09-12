@@ -16,6 +16,13 @@ one another agent may pick up, and you will both be right.
 
 ## Before you write code
 
+**Read the target repository's own guidance.** `AGENTS.md`, `DESIGN.md`,
+`.agents/skills/`, then `CONTRIBUTING.md` and `docs/`. Their conventions beat
+your habits and beat anything in the-hill's own documents — especially the UI,
+where a screen unlike every other screen is a defect however good it looks
+alone. Where they are silent, copy the nearest existing example rather than
+inventing a style.
+
 **Read the acceptance criteria against the actual schema.** They were written
 by someone who could not run the code. If a criterion is wrong — a column that
 is `NOT NULL` where the issue assumes nullable, a state that cannot occur —
