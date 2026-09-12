@@ -5,9 +5,32 @@ Plain notes. What it is, what it does, what it refuses to do.
 ## What it is
 
 - An app for running a software factory.
-- A team of agents working one mission, across several repositories.
+- A team of agents working one mission, across one or several repositories.
 - It helps agents deliver. It does not gate them.
 - If it breaks or you delete it, your repositories keep working.
+
+## Who does what
+
+```
+human initiator          starts the mission; only one who can halt it
+  └── Factory Manager    one per run; answers to the initiator
+        └── Section Manager    one per harness; runs the agents in it
+              └── builder · reviewer · security · operator
+```
+
+- **Factory Manager** — is the mission getting done? If not, does the initiator know why?
+- **Section Manager** — are my agents working? Is my harness's failure staying inside my harness?
+  - Note: the tool cannot yet show one peer another peer's agents. See *Not built yet*.
+- **Builder** — one lane, finished so someone else can review it.
+- **Reviewer** — refuse work that is not ready.
+- **Security** — find what the others would wave through.
+- **Operator** — the machine itself: disk, liveness, credentials.
+- Prompts are in `docs/roles/`. Paste one at the top of an agent's instructions.
+
+## Two rules for everyone
+
+- **Never review your own lane.** Not when CI is green. Not when you are the only one awake. The tool refuses it.
+- **Say what you measured, not what you expect.** If you did not run it, say so.
 
 ## One mission, one run
 
@@ -70,29 +93,6 @@ Plain notes. What it is, what it does, what it refuses to do.
 - Read state is local. The same agent on another machine sees the backlog again.
 - Nothing is deleted. `--all` shows what you already read.
 - A message may not carry a verdict marker. Refused.
-
-## Who does what
-
-```
-human initiator          starts the mission; only one who can halt it
-  └── Factory Manager    one per run; answers to the initiator
-        └── Section Manager    one per harness; runs the agents in it
-              └── builder · reviewer · security · operator
-```
-
-- **Factory Manager** — is the mission getting done? If not, does the initiator know why?
-- **Section Manager** — are my agents working? Is my harness's failure staying inside my harness?
-  - Note: the tool cannot yet show one peer another peer's agents. See *Not built yet*.
-- **Builder** — one lane, finished so someone else can review it.
-- **Reviewer** — refuse work that is not ready.
-- **Security** — find what the others would wave through.
-- **Operator** — the machine itself: disk, liveness, credentials.
-- Prompts are in `docs/roles/`. Paste one at the top of an agent's instructions.
-
-## Two rules for everyone
-
-- **Never review your own lane.** Not when CI is green. Not when you are the only one awake. The tool refuses it.
-- **Say what you measured, not what you expect.** If you did not run it, say so.
 
 ## The board
 
