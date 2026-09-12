@@ -6,10 +6,12 @@ reads, and the third state that matters more than either -- unreachable, which
 must never render as free.
 """
 import json
+import re
 import os
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 os.environ.setdefault("HILL_HOME", tempfile.mkdtemp(prefix="hill-test-"))
@@ -183,29 +185,49 @@ class NoRunControlTest(unittest.TestCase):
     A run completes when the mission is accomplished, and only the person who
     started it may halt it. "Accomplished" is a human judgement: an agent can
     report progress toward it and must never declare it reached. The cheapest
-    durable guarantee is that no code path here can close or reopen the board
-    issue at all, so this asserts the absence rather than trusting the habit.
+    durable guarantee is that no code path here can end a run at all, so this
+    asserts the absence rather than trusting the habit.
+
+    Two earlier spellings of this guard were wrong in opposite directions, which
+    is why it now has tests of its own. The first also matched `--state open` --
+    the read filter on `gh pr list` -- and failed on honest code. The second
+    expected `--method PATCH` adjacent and so missed `"--method", "PATCH"`,
+    passing while real PATCH code was added.
     """
 
+    FORBIDDEN = re.compile(
+        r"""["']issue["']\s*,\s*["'](?:close|reopen)["']"""        # gh issue close
+        r"""|["']pr["']\s*,\s*["'](?:close|reopen|merge)["']"""    # gh pr close/merge
+        r"""|issues/\{number\}["'][^\n]*PATCH"""                    # PATCH the run
+        r"""|issues/\{number\}[^\n]*--method""", re.S)
+
     def sources(self):
-        import pathlib
-        root = pathlib.Path(__file__).resolve().parent.parent
+        root = Path(__file__).resolve().parent.parent
         files = list((root / "hill_lib").glob("*.py")) + [root / "hill"]
         return {f: f.read_text(encoding="utf-8") for f in files}
 
-    def test_nothing_closes_or_reopens_an_issue(self):
-        import re
-        # Write verbs only. An earlier version of this guard also matched
-        # `--state open`, which is the read filter on `gh pr list` -- it failed
-        # on honest code, and a guard that cries wolf gets deleted.
-        forbidden = re.compile(
-            r"""["']issue["']\s*,\s*["'](close|reopen)["']"""      # gh issue close
-            r"""|["']pr["']\s*,\s*["'](close|reopen|merge)["']"""  # gh pr close/merge
-            r"""|--method\s*["']?PATCH"""                            # REST state change
-            r"""|["']-X["']\s*,\s*["']PATCH["']""", re.S)
+    def test_the_guard_stops_a_patch_aimed_at_the_run(self):
+        self.assertIsNotNone(self.FORBIDDEN.search(
+            '_gh(["api", f"repos/{repo}/issues/{number}", "--method", "PATCH"])'))
+
+    def test_the_guard_allows_editing_our_own_comment(self):
+        # Publishing a peer's liveness edits one comment in place. That is our
+        # status line, not the run.
+        self.assertIsNone(self.FORBIDDEN.search(
+            '_gh(["api", f"repos/{repo}/issues/comments/{cid}", "--method", "PATCH"])'))
+
+    def test_the_guard_allows_a_state_read_filter(self):
+        self.assertIsNone(self.FORBIDDEN.search(
+            '_gh(["pr", "list", "--repo", repo, "--state", "open"])'))
+
+    def test_the_guard_stops_closing_a_run(self):
+        self.assertIsNotNone(self.FORBIDDEN.search('_gh(["issue", "close", "40"])'))
+        self.assertIsNotNone(self.FORBIDDEN.search('_gh(["pr", "merge", "9"])'))
+
+    def test_no_module_ends_a_run(self):
         for path, text in self.sources().items():
             with self.subTest(path=path.name):
-                self.assertIsNone(forbidden.search(text),
+                self.assertIsNone(self.FORBIDDEN.search(text),
                                   f"{path.name} appears to end a run or land work")
 
     def test_nothing_edits_the_board_issue_body_or_title(self):

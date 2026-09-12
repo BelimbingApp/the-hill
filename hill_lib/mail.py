@@ -105,3 +105,85 @@ def fetch(repo: str, number: int) -> list[dict]:
                         "body": stripped, "url": c.get("url"), "at": c.get("at")})
     out.sort(key=lambda m: (m["at"] or "", m["id"]))
     return out
+
+
+# --- peer liveness ---------------------------------------------------------
+# A Factory Manager is told to read "the floor", and liveness lived in a
+# per-machine directory nothing else could see. You cannot notice that a
+# harness went rate-limited if you cannot see the harness.
+#
+# Each peer keeps ONE comment on the board and edits it in place. Appending a
+# comment per tick would bury the run's actual conversation within a day, and
+# the interesting fact is the current state, not its history.
+
+_PEER = re.compile(r"^\*\*Peer:\*\*[ \t]*(\S+)[ \t]*$", re.M | re.I)
+_MARK = "<!-- hill:peer -->"
+
+
+def render_peer(host: str, agents: list[dict], note: str | None = None) -> str:
+    lines = [_MARK, f"**Peer:** {host}", ""]
+    if note:
+        lines += [note.strip(), ""]
+    if not agents:
+        lines.append("No agent has ticked on this peer.")
+    for a in sorted(agents, key=lambda r: r.get("agent") or ""):
+        bits = [f"- **{a.get('agent')}** last tick {a.get('at')}"]
+        if a.get("freshness"):
+            bits.append(f"({a['freshness']})")
+        if a.get("lane"):
+            bits.append(f"lane {a['lane']}")
+        if a.get("quota"):
+            bits.append(f"capacity {a['quota']}")
+        lines.append(" ".join(bits))
+    lines += ["", "_Edited in place each cycle; it is state, not history._"]
+    return "\n".join(lines) + "\n"
+
+
+def publish_peer(repo: str, number: int, host: str, agents: list[dict],
+                 note: str | None = None) -> str:
+    """Create or update this peer's liveness comment. Returns its URL."""
+    body = render_peer(host, agents, note)
+    existing = None
+    for c in _raw_comments(repo, number):
+        text = c.get("body") or ""
+        m = _PEER.search(text)
+        if _MARK in text and m and m.group(1) == host:
+            existing = c
+            break
+    if existing is None:
+        _gh(["issue", "comment", str(number), "--repo", repo, "--body-file", "-"], stdin=body)
+    else:
+        # PATCH on a COMMENT, never on the issue. The issue is the run and the
+        # run is not ours to edit; this is our own status line.
+        _gh(["api", f"repos/{repo}/issues/comments/{existing['id']}",
+             "--method", "PATCH", "-f", f"body={body}"])
+    for c in _raw_comments(repo, number):
+        if _MARK in (c.get("body") or "") and (_PEER.search(c.get("body") or "") or [None]) \
+                and _PEER.search(c.get("body") or "").group(1) == host:
+            return c.get("url") or ""
+    raise Unreachable("published but the peer record was not found on re-read")
+
+
+def peers(repo: str, number: int) -> list[dict]:
+    """Every peer's last published state, as the floor can see it."""
+    out = []
+    for c in _raw_comments(repo, number):
+        text = c.get("body") or ""
+        m = _PEER.search(text)
+        if _MARK not in text or not m:
+            continue
+        out.append({"host": m.group(1), "url": c.get("url"),
+                    "updated_at": c.get("updated_at") or c.get("at"),
+                    "body": text.replace(_MARK, "").strip()})
+    out.sort(key=lambda p: p["host"])
+    return out
+
+
+def _raw_comments(repo: str, number: int) -> list[dict]:
+    raw = _gh(["api", f"repos/{repo}/issues/{number}/comments", "--paginate",
+               "--jq", "[.[] | {id, body, url: .html_url, at: .created_at, updated_at}]"])
+    rows = []
+    for chunk in raw.strip().splitlines():
+        if chunk.strip():
+            rows.extend(json.loads(chunk))
+    return rows
