@@ -279,9 +279,9 @@ def cmd_workspaces(args):
         #
         # Both conditions are needed. A fresh repo on an unborn branch also has
         # no head, but git reads there perfectly and it can hold uncommitted
-        # work -- ~/repo/laravel/mariabelimbing has 27 such files. Keying on the
-        # head alone called that unreadable and hid exactly the thing worth
-        # seeing.
+        # work. Keying on the head alone called such a repository unreadable
+        # and hid exactly the thing worth seeing -- found on a real checkout
+        # holding 27 uncommitted files.
         if not w.get("head") and not w.get("branch"):
             flag = "unreadable"
         elif w["dirty"]:

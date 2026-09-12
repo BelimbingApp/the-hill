@@ -165,4 +165,8 @@ hill board / hill serve      the dashboard
 
 - Python 3, standard library only. Nothing to install.
 - `git`, and `gh` logged in.
-- No git remote yet. Copy the directory to a second machine.
+- Settings, all optional except the board:
+  - `HILL_AGENT` — your agent id.
+  - `HILL_BOARD` — `owner/repo#123`, the run. Needed to send or read messages.
+  - `HILL_REPOS` — comma-separated `owner/repo` list the floor covers.
+  - `HILL_ROOTS` — colon-separated dirs holding your checkouts. Default `~/repo`.

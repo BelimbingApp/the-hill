@@ -280,8 +280,7 @@ class DisplayFlagTest(unittest.TestCase):
     Kept as a pure function of a row so the two cases that look alike -- an
     orphan git cannot read, and a fresh repo whose branch has no commits yet --
     stay distinguishable. Keying on the missing head alone labelled
-    ~/repo/laravel/mariabelimbing "unreadable" while it held 27 uncommitted
-    files, which is the opposite of what a cleanup tool exists to surface.
+    a real checkout "unreadable" while it held 27 uncommitted files, which is the opposite of what a cleanup tool exists to surface.
     """
 
     @staticmethod

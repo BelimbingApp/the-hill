@@ -131,7 +131,17 @@ export HILL_AGENT=your-agent-id
 ```
 
 `HILL_AGENT` is the id every command attributes work to; with it set you can
-drop `--agent` everywhere. Then check it works:
+drop `--agent` everywhere. Three more, all optional except the board:
+
+```bash
+export HILL_BOARD=owner/repo#123   # the run; needed to send or read messages
+export HILL_REPOS=owner/a,owner/b  # repositories this floor covers
+export HILL_ROOTS=~/repo:~/work    # where this machine keeps its checkouts
+```
+
+Nothing is baked into the source — every peer runs the same app, so the floor
+it watches and the disk it scans have to be settings rather than one person's
+paths. Then check it works:
 
 ```bash
 hill tick               # record that you are running

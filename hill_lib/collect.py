@@ -16,9 +16,14 @@ from collections import defaultdict
 from . import db as _db
 from . import live as _live
 
-REPOS = ["BelimbingApp/blb-people", "BelimbingApp/ai-team",
-         "BelimbingApp/belimbing", "BelimbingApp/blb-people-connector",
-         "SB-Tape/blb-sbg"]
+# The repositories this floor covers. Every peer runs the same app, so these
+# cannot be one person's list baked into the source: set HILL_REPOS as a
+# comma-separated `owner/repo` list. The default is the floor this was built
+# for, and is only a default.
+REPOS = [r.strip() for r in os.environ.get(
+    "HILL_REPOS",
+    "BelimbingApp/blb-people,BelimbingApp/ai-team,BelimbingApp/belimbing,"
+    "BelimbingApp/blb-people-connector,SB-Tape/blb-sbg").split(",") if r.strip()]
 
 def gh(path, jq=None):
     cmd = ["gh", "api", path]
@@ -365,7 +370,15 @@ def collect():
         try: return subprocess.run(c, shell=True, capture_output=True, text=True, timeout=30).stdout.strip()
         except Exception: return ""
 
-    roots = ["/home/kiat/repo/opus-max", "/home/kiat/repo/sbg", "/home/kiat/repo/laravel"]
+    # Where this machine keeps its checkouts. Hardcoding one user's home meant
+    # the scan found nothing on any other peer while reporting success, which
+    # is the shape of bug this board exists to catch.
+    roots = [os.path.expanduser(r.strip())
+             for r in os.environ.get("HILL_ROOTS", "~/repo").split(":") if r.strip()]
+    roots = [r for r in roots if os.path.isdir(r)]
+    # One level down too: ~/repo/<clone-root>/<checkout> is the usual shape.
+    roots += [os.path.join(r, n) for r in list(roots)
+              for n in sorted(os.listdir(r)) if os.path.isdir(os.path.join(r, n))]
     for root in roots:
         if not os.path.isdir(root): continue
         for name in sorted(os.listdir(root)):
@@ -378,7 +391,8 @@ def collect():
             unpushed = sh(f"git -C {p} log --oneline @{{u}}..HEAD 2>/dev/null")
             size = sh(f"du -sm {p} 2>/dev/null | cut -f1")
             snap["workspaces"].append({
-                "path": p.replace("/home/kiat/", "~/"), "branch": branch, "head": head,
+                "path": p.replace(os.path.expanduser("~") + "/", "~/"),
+                "branch": branch, "head": head,
                 "dirty_files": len([x for x in dirty.splitlines() if x.strip()]),
                 "unpushed": len([x for x in unpushed.splitlines() if x.strip()]),
                 "size_mb": int(size) if size.isdigit() else None,
