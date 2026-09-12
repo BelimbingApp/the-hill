@@ -166,6 +166,48 @@ class BoardStateTest(unittest.TestCase):
         json.dumps(b.state(), default=str)
 
 
+class BindFailureTest(unittest.TestCase):
+    """A busy port must read as a busy port, not as a crash.
+
+    It used to surface as a bare OSError traceback, and worse, only after the
+    collector had already started a two-minute pass -- so the operator saw a
+    stack trace with no obvious cause and no board.
+    """
+
+    def test_a_port_already_in_use_says_so_and_suggests_the_next_one(self):
+        import socket
+        sock = socket.socket()
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("127.0.0.1", 0))
+        sock.listen(1)
+        port = sock.getsockname()[1]
+        self.addCleanup(sock.close)
+
+        with self.assertRaises(SystemExit) as caught:
+            server.serve(host="127.0.0.1", port=port, interval=300)
+
+        message = str(caught.exception)
+        self.assertIn("already in use", message)
+        self.assertIn(str(port + 1), message, "suggest a port they can actually use")
+        self.assertNotIn("Traceback", message)
+
+    def test_the_collector_does_not_start_when_the_bind_fails(self):
+        # The bind happens first precisely so a doomed run does not spend two
+        # minutes of GitHub quota before reporting that it cannot serve.
+        import socket
+        sock = socket.socket()
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("127.0.0.1", 0))
+        sock.listen(1)
+        port = sock.getsockname()[1]
+        self.addCleanup(sock.close)
+
+        with mock.patch.object(server.collect, "collect") as collected:
+            with self.assertRaises(SystemExit):
+                server.serve(host="127.0.0.1", port=port, interval=300)
+        collected.assert_not_called()
+
+
 class RouteTest(unittest.TestCase):
     """Route selection, without binding a socket."""
 

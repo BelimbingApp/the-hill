@@ -171,12 +171,32 @@ def serve(host: str = "127.0.0.1", port: int = 8787, interval: int = 300) -> Non
     # repaint instead of rendering once.
     page = page.replace(PLACEHOLDER, "null")
 
-    board = Board(interval)
-    threading.Thread(target=board.run, daemon=True, name="hill-collector").start()
-
-    Handler.board = board
+    # Bind before starting the collector: a failed bind used to surface as a
+    # bare OSError traceback *after* a two-minute collection had already begun,
+    # which reads as a crash rather than "that port is taken".
+    Handler.board = None
     Handler.page = page
-    httpd = ThreadingHTTPServer((host, port), Handler)
+    try:
+        httpd = ThreadingHTTPServer((host, port), Handler)
+    except OSError as exc:
+        import errno
+        if exc.errno == errno.EADDRINUSE:
+            raise SystemExit(
+                f"port {port} is already in use — another board is probably "
+                f"running there.\n"
+                f"  check it:  curl -s http://127.0.0.1:{port}/healthz\n"
+                f"  or pick another:  hill serve --port {port + 1}"
+            ) from None
+        if exc.errno in (errno.EACCES, errno.EPERM):
+            raise SystemExit(
+                f"not allowed to bind port {port}; ports below 1024 need "
+                f"privileges — try a higher one"
+            ) from None
+        raise
+
+    board = Board(interval)
+    Handler.board = board
+    threading.Thread(target=board.run, daemon=True, name="hill-collector").start()
     shown = "localhost" if host in ("127.0.0.1", "::1") else host
     # flush=True throughout: started under nohup or a supervisor, stdout is a
     # pipe and Python buffers it, so the operator sees nothing at all -- not
