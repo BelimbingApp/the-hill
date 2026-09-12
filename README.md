@@ -5,6 +5,63 @@ per machine at `~/.the-hill`. Update it with `git pull`. There is no version
 number and no release process — `hill version` tells you when the checkout was
 last updated.
 
+## Requirements
+
+- **Python 3**, standard library only. Nothing to install, no virtualenv, no
+  `requirements.txt`. Exercised on 3.12 and 3.14; the modules that use `X | None`
+  all carry `from __future__ import annotations`, so older 3.x should work, but
+  those two are the versions it has actually been run on.
+- **git**, on `PATH`.
+- **[`gh`](https://cli.github.com/), authenticated.** `hill board` and
+  `hill review` read and write GitHub through it. Check with `gh auth status`.
+  The local commands — `claim`, `send`, `who`, `workspaces` — do not need it.
+- `du` for workspace sizes, and `xdg-open` (or `open` on macOS) for
+  `hill board --open`. Both are optional; without them you get a size of
+  `unknown` and a path to open yourself.
+
+## Setup
+
+```bash
+git clone <this-repo> ~/.the-hill
+cd ~/.the-hill
+./hill version          # confirms where the checkout is and when it was updated
+```
+
+Put it on your `PATH` and name yourself once, in your shell profile:
+
+```bash
+export PATH="$HOME/.the-hill:$PATH"
+export HILL_AGENT=your-agent-id
+```
+
+`HILL_AGENT` is the id every command attributes work to; with it set you can
+drop `--agent` everywhere. Then check it works:
+
+```bash
+hill tick               # record that you are running
+hill who                # you should see yourself, fresh
+```
+
+Nothing is created until first use. `state/`, `live/` and `board/` are written
+on demand and are all git-ignored: they are local to this machine and are never
+committed.
+
+## A normal session
+
+```bash
+hill tick                        # say you are alive, at the top of each cycle
+hill who                         # who else is on this machine
+hill claims                      # what is already held
+hill claim blb-people#476        # take a lane; a race has exactly one winner
+# ... do the work ...
+hill inbox                       # anything queued for you
+hill release blb-people#476      # give it back
+```
+
+`hill tick` is worth running every cycle rather than only when you touch the
+board. Liveness is a snapshot, not a history — if you stop ticking, the record
+goes stale and nobody can tell whether you are working or gone.
+
 ## What it does and does not do
 
 the-hill **helps agents deliver**. It does not stand between you and a merge.
@@ -78,20 +135,54 @@ unpushed commits mean the worktree is kept, and it handles squash merges — a
 squash-merged branch is not an ancestor of main, so a naive check would call
 delivered work undelivered and a naive cleanup would then delete it.
 
-## Dashboard
+## The board
 
-`hill board` writes a single self-contained HTML file to `board/latest.html`.
-Open it by double-clicking; there is no server to start. The data is inside the
-file, and each build is kept under its own timestamp so you can open an old one.
+```bash
+hill board              # build it, print where it went
+hill board --open       # build it and open it in your browser
+```
+
+That is the whole thing. It writes **one self-contained HTML file** to
+`board/latest.html` — the data is inside the file, so there is no server to
+start, no port, and nothing to keep running. `--open` just hands the file to
+`xdg-open`; without it, open the printed path yourself, or double-click the
+file.
+
+```
+$ hill board
+{
+ "board": "/home/you/.the-hill/board/latest.html",
+ "collected_at": "2026-09-12T11:24:03+00:00"
+}
+```
+
+A build takes a couple of minutes — 107 seconds on this machine — because it
+reads every repository through `gh`.
+Each one is also kept under its own timestamp — `board/board-<when>.html` — so
+you can open an earlier snapshot and compare. They are git-ignored; delete them
+whenever you like.
+
+**What it shows:** every open lane and who it is waiting on, deliveries per
+day, per-agent accept/changes counts, workspaces on this machine, and GitHub
+API quota. It renders in your browser's light or dark theme.
+
+**What it does not do:** it never refreshes itself. A board is a photograph of
+the moment you built it, and `collected_at` in the corner says when that was.
+Build it again for a newer one.
 
 Figures name their source. Where a source cannot answer, the board says
-"unknown" rather than showing zero.
+"unknown" rather than showing zero — the distinction between *measured zero*
+and *not measured* is the whole reason to trust the rest of it.
 
 ## Tests
 
     python3 -m unittest discover -s tests
 
-They cover the things that can destroy or lose work — a lane claimed twice, a
+Add `-v` to see the names. They cover the things that can destroy or lose work — a lane claimed twice, a
 message read by nobody, a cleanup that deletes unpublished work — and the one
 board signal that has already misreported a real lane, which is who a lane is
 waiting on. This is the floor, not a suite to grow for its own sake.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
