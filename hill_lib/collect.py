@@ -25,22 +25,28 @@ REPOS = [r.strip() for r in os.environ.get(
     "BelimbingApp/blb-people,BelimbingApp/ai-team,BelimbingApp/belimbing,"
     "BelimbingApp/blb-people-connector,SB-Tape/blb-sbg").split(",") if r.strip()]
 
+# Every read that failed this pass. The board's whole dataset comes through
+# gh(), and returning None on failure made an unreachable repository look
+# exactly like a quiet one -- the mistake this tool exists to avoid, sitting in
+# the collector. Callers still get None, because a half-built snapshot is worse
+# than a smaller one, but the failure is recorded and reported rather than lost.
+READ_ERRORS: list[dict] = []
+
+
 def gh(path, jq=None):
     cmd = ["gh", "api", path]
     try:
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         if out.returncode != 0:
+            READ_ERRORS.append({"path": path,
+                                "why": (out.stderr or "gh failed").strip()[:160]})
             return None
         return json.loads(out.stdout) if out.stdout.strip() else None
-    except Exception:
+    except Exception as exc:
+        READ_ERRORS.append({"path": path, "why": f"{type(exc).__name__}: {exc}"[:160]})
         return None
 
-def agent_of(labels):
-    for l in labels:
-        n = l["name"] if isinstance(l, dict) else l
-        if n.startswith("agent:"):
-            return n[6:]
-    return None
+from .gh import agent_of  # noqa: E402,F401  one parser, lowercased everywhere
 
 
 
@@ -167,6 +173,7 @@ def collect():
     }
 
     # ---- GitHub: open PRs and recent merges -------------------------------------
+    READ_ERRORS.clear()
     run_started = (snap.get("run") or {}).get("started_at")
     for full in REPOS:
         short = full.split("/")[1]
@@ -410,6 +417,10 @@ def collect():
         }
     snap["quota"]["model_tokens"] = {"state": "unknown", "why": "no harness on this machine reports model quota"}
 
+    # Reads that failed this pass. Reported so a number that is smaller than it
+    # should be is visible as such, rather than passing for a quiet floor.
+    snap["read_errors"] = list(READ_ERRORS)
+
     # ---- coverage declarations (what each number does NOT check) -----------------
     snap["coverage"] = [
       {"signal": "waiting_on", "checks": "draft flag, latest check-run per name, mergeable_state, and — when the "
@@ -431,6 +442,9 @@ def collect():
        "not_checked": "liveness — an agent can be alive and idle, or dead and recently merged"},
       {"signal": "workspaces", "checks": "git status, unpushed commits, disk size on this machine",
        "not_checked": "other machines; whether a worktree's composed dependencies are stale"},
+      {"signal": "read_errors", "checks": "every gh call this pass that returned non-zero or raised",
+       "not_checked": "what those calls would have returned. A number below is a floor when this "
+                  "list is non-empty: the repository was unreachable, not quiet"},
       {"signal": "model quota", "checks": "nothing",
        "not_checked": "everything — reported as unknown rather than zero"},
     ]

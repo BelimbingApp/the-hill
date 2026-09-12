@@ -26,6 +26,8 @@ import os
 import re
 import subprocess
 
+from .gh import Unreachable, run as _gh_run  # noqa: F401
+
 _GH_TIMEOUT = 30
 _AGENT = r"[a-z0-9]+(?:[._-][a-z0-9]+)*"
 _FROM = re.compile(rf"^\*\*From:\*\*[ \t]*({_AGENT})[ \t]*$", re.M | re.I)
@@ -35,8 +37,6 @@ _FORBIDDEN = re.compile(r"^\*\*(Verdict|HEAD reviewed):\*\*", re.M | re.I)
 _BOARD_RE = re.compile(r"^(?P<repo>[A-Za-z0-9._-]+/[A-Za-z0-9._-]+)#(?P<num>\d+)$")
 
 
-class Unreachable(RuntimeError):
-    """GitHub could not be read or written. Not the same as no messages."""
 
 
 def board() -> tuple[str, int] | None:
@@ -64,14 +64,7 @@ def render(sender: str, to: str, body: str, ref: str | None = None) -> str:
 
 
 def _gh(args: list[str], stdin: str | None = None) -> str:
-    try:
-        proc = subprocess.run(["gh", *args], capture_output=True, text=True,
-                              input=stdin, timeout=_GH_TIMEOUT)
-    except Exception as exc:
-        raise Unreachable(f"{type(exc).__name__}: {exc}") from None
-    if proc.returncode != 0:
-        raise Unreachable((proc.stderr or "gh failed").strip()[:200])
-    return proc.stdout
+    return _gh_run(args, stdin=stdin)
 
 
 def post(repo: str, number: int, sender: str, to: str, body: str,

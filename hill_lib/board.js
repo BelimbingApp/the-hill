@@ -42,6 +42,19 @@ $("#mission").innerHTML = runLine +
             (P.agents && P.agents.length ? ` (${P.agents.map(esc).join(", ")})` : "") +
             `</span>` : "");
 
+// Reads that failed this pass. A board showing fewer lanes because it could
+// not reach a repository must say so; silently smaller numbers are the failure
+// this whole page is built to avoid.
+const readErrors = D.read_errors || [];
+if (readErrors.length) {
+  const el = $("#live");
+  if (el) {
+    el.className = "live bad";
+    el.textContent = `${readErrors.length} read${readErrors.length === 1 ? "" : "s"} failed — numbers below are incomplete`;
+    el.title = readErrors.map(e => `${e.path}: ${e.why}`).join("\n");
+  }
+}
+
 const q = D.quota.github_core || {};
 $("#meta").innerHTML =
   `collected <b>${esc(D.collected_at.replace("T", " ").replace("+00:00", "Z"))}</b><br>` +

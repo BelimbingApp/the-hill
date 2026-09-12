@@ -142,3 +142,66 @@ class AssemblyTest(unittest.TestCase):
         import inspect
         from hill_lib import server
         self.assertIn("build.assemble()", inspect.getsource(server.serve))
+
+
+class ReadErrorTest(unittest.TestCase):
+    """A failed read must be visible, not absorbed.
+
+    collect.gh() returned None on any failure and said nothing. The board's
+    whole dataset comes through it, so an unreachable repository produced a
+    smaller board that looked exactly like a quiet one -- the mistake this
+    tool exists to avoid, in the collector itself.
+    """
+
+    def setUp(self):
+        from hill_lib import collect
+        self.collect = collect
+        collect.READ_ERRORS.clear()
+        self.addCleanup(collect.READ_ERRORS.clear)
+
+    def test_a_failing_call_is_recorded_and_still_returns_none(self):
+        from unittest import mock
+        proc = mock.Mock(returncode=1, stdout="", stderr="gh: Not Found (HTTP 404)")
+        with mock.patch("hill_lib.collect.subprocess.run", return_value=proc):
+            self.assertIsNone(self.collect.gh("repos/o/r/pulls"))
+        self.assertEqual(len(self.collect.READ_ERRORS), 1)
+        self.assertIn("Not Found", self.collect.READ_ERRORS[0]["why"])
+        self.assertEqual(self.collect.READ_ERRORS[0]["path"], "repos/o/r/pulls")
+
+    def test_an_exception_is_recorded_too(self):
+        from unittest import mock
+        with mock.patch("hill_lib.collect.subprocess.run", side_effect=OSError("boom")):
+            self.assertIsNone(self.collect.gh("repos/o/r/pulls"))
+        self.assertEqual(len(self.collect.READ_ERRORS), 1)
+
+    def test_a_successful_call_records_nothing(self):
+        from unittest import mock
+        proc = mock.Mock(returncode=0, stdout='{"ok":true}', stderr="")
+        with mock.patch("hill_lib.collect.subprocess.run", return_value=proc):
+            self.assertEqual(self.collect.gh("repos/o/r"), {"ok": True})
+        self.assertEqual(self.collect.READ_ERRORS, [])
+
+
+class AgentLabelTest(unittest.TestCase):
+    """One label means one agent, wherever it is read.
+
+    collect parsed `agent:<id>` without normalising and floor lowercased, so
+    `agent:Opus-Max` was one agent in the board's table and a different one in
+    the claim check.
+    """
+
+    def test_every_reader_normalises_the_same_way(self):
+        from hill_lib import gh, collect, floor
+        labels = [{"name": "agent:Opus-Max"}, {"name": "task:review"}]
+        self.assertEqual(gh.agent_of(labels), "opus-max")
+        self.assertEqual(collect.agent_of(labels), "opus-max")
+        self.assertEqual(floor._agent_labels(labels), ["opus-max"])
+
+    def test_surrounding_space_does_not_make_a_second_agent(self):
+        from hill_lib import gh
+        self.assertEqual(gh.agent_of([{"name": "agent: astra "}]), "astra")
+
+    def test_no_agent_label_is_none(self):
+        from hill_lib import gh
+        self.assertIsNone(gh.agent_of([{"name": "task:ready"}]))
+        self.assertIsNone(gh.agent_of([]))

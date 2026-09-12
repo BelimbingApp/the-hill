@@ -30,14 +30,14 @@ import os
 import re
 import subprocess
 
+from .gh import Unreachable, agent_labels as _agent_labels, run as _gh_run  # noqa: F401
+
 _GH_TIMEOUT = 30
 _KEY_RE = re.compile(r"^(?P<repo>[A-Za-z0-9._/-]+)#(?P<num>\d+)$")
 _FROM_RE = re.compile(
     r"^\*\*From:\*\*[ \t]*([a-z0-9]+(?:[._-][a-z0-9]+)*)(?:[ \t]|$)", re.M | re.I)
 
 
-class Unreachable(RuntimeError):
-    """GitHub could not be read. Not the same as nobody holding the lane."""
 
 
 def parse_key(key: str, repos: list[str] | None = None) -> tuple[str, int] | None:
@@ -60,23 +60,9 @@ def parse_key(key: str, repos: list[str] | None = None) -> tuple[str, int] | Non
 
 
 def _gh(args: list[str]) -> str:
-    try:
-        proc = subprocess.run(["gh", *args], capture_output=True, text=True,
-                              timeout=_GH_TIMEOUT)
-    except Exception as exc:
-        raise Unreachable(f"{type(exc).__name__}: {exc}") from None
-    if proc.returncode != 0:
-        raise Unreachable((proc.stderr or "gh failed").strip()[:200])
-    return proc.stdout
+    return _gh_run(args)
 
 
-def _agent_labels(labels) -> list[str]:
-    out = []
-    for label in labels or []:
-        name = label["name"] if isinstance(label, dict) else str(label)
-        if name.startswith("agent:"):
-            out.append(name[len("agent:"):].strip().lower())
-    return out
 
 
 def holders(repo: str, number: int) -> dict:
