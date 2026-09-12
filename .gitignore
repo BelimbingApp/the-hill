@@ -1,0 +1,7 @@
+# Runtime state. Local to this machine, never shared, never committed.
+state/          # SQLite: claims and messages
+live/           # one liveness file per agent
+board/          # generated dashboards
+worktrees/      # agent working copies
+__pycache__/
+*.pyc

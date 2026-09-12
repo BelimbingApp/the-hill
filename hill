@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+"""the-hill — operations CLI for the agent board.
+
+One checkout per machine at ~/.the-hill, updated with an ordinary `git pull`.
+There is no version scheme and no release tree: `hill version` reports when the
+checkout was last updated, which is what the owner asked for in ai-team#128.
+
+The commands split along the line that discussion drew. Delivery and review
+decisions belong to GitHub. Contended local state — who holds a lane, what is in
+whose mailbox — belongs to SQLite. Uncontended local state — liveness, capacity —
+belongs to a file per agent. Nothing here can block a merge on a product
+repository; the-hill assists delivery, it does not gate it.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from hill_lib import db, live  # noqa: E402
+
+
+def agent_id(args) -> str:
+    a = getattr(args, "agent", None) or os.environ.get("HILL_AGENT")
+    if not a:
+        sys.exit("no agent id: pass --agent or set HILL_AGENT")
+    return a
+
+
+def out(obj, args):
+    if getattr(args, "json", False):
+        print(json.dumps(obj, indent=1, default=str))
+        return
+    if isinstance(obj, str):
+        print(obj)
+    else:
+        print(json.dumps(obj, indent=1, default=str))
+
+
+# --- commands -------------------------------------------------------------
+
+def cmd_version(args):
+    root = Path(__file__).resolve().parent
+    try:
+        when = subprocess.run(["git", "-C", str(root), "log", "-1", "--format=%cI"],
+                              capture_output=True, text=True, timeout=10).stdout.strip()
+        dirty = subprocess.run(["git", "-C", str(root), "status", "--porcelain"],
+                               capture_output=True, text=True, timeout=10).stdout.strip()
+    except Exception:
+        when, dirty = "", ""
+    out({"home": str(root), "updated": when or "unknown",
+         "local_edits": bool(dirty),
+         "note": "datetime identifies the update, not the bytes; two machines "
+                 "showing the same time may still differ"}, args)
+
+
+def cmd_tick(args):
+    rec = live.tick(agent_id(args), session=args.session, lane=args.lane,
+                    quota_note=args.quota)
+    out(rec, args)
+
+
+def cmd_who(args):
+    con = db.connect()
+    held = {c["agent"]: c for c in db.claims(con)}
+    rows = live.read_all()
+    if args.json:
+        return out({"agents": rows, "claims": db.claims(con)}, args)
+    if not rows:
+        print("no agents have ticked on this machine")
+    for r in rows:
+        age = f"{r['age_s']}s" if r.get("age_s") is not None else "?"
+        lane = held.get(r["agent"], {}).get("key", "")
+        print(f"  {r['agent']:<22} {r['freshness']:<8} last tick {age:>7}"
+              + (f"   holds {lane}" if lane else ""))
+    for c in db.claims(con):
+        if c["agent"] not in {r["agent"] for r in rows}:
+            print(f"  {c['agent']:<22} {'no tick':<8} {'':>16}   holds {c['key']}")
+
+
+def cmd_claim(args):
+    con = db.connect()
+    try:
+        rec = db.claim(con, args.key, agent_id(args), session=args.session,
+                       note=args.note, take=args.take)
+    except db.Held as e:
+        print(f"held by {e.row['agent']} since {e.row['claimed_at']}", file=sys.stderr)
+        print("pass --take to take it over; the previous holder is recorded, "
+              "but taking a lane does not stop them writing", file=sys.stderr)
+        sys.exit(3)
+    out(rec, args)
+
+
+def cmd_release(args):
+    con = db.connect()
+    ok = db.release(con, args.key, None if args.force else agent_id(args))
+    out({"released": ok, "key": args.key}, args)
+
+
+def cmd_claims(args):
+    con = db.connect()
+    rows = db.claims(con)
+    if args.json:
+        return out(rows, args)
+    if not rows:
+        print("no lanes claimed")
+    for c in rows:
+        print(f"  {c['key']:<28} {c['agent']:<20} since {c['claimed_at']}"
+              + (f"  — {c['note']}" if c["note"] else ""))
+
+
+def cmd_send(args):
+    con = db.connect()
+    body = args.body
+    if body == "-":
+        body = sys.stdin.read()
+    mid = db.send(con, agent_id(args), args.to, body, ref=args.ref)
+    out({"id": mid, "to": args.to, "ref": args.ref,
+         "note": "queued; this does not wake the recipient — use the harness's "
+                 "own messaging for that, or they read it on their next turn"}, args)
+
+
+def cmd_inbox(args):
+    con = db.connect()
+    rows = db.inbox(con, agent_id(args), unread_only=not args.all, mark=not args.peek)
+    if args.json:
+        return out(rows, args)
+    if not rows:
+        print("inbox empty")
+    for m in rows:
+        print(f"\n--- #{m['id']} from {m['sender']} at {m['sent_at']}"
+              + (f"\n    ref: {m['ref']}" if m["ref"] else ""))
+        print(m["body"])
+
+
+def cmd_events(args):
+    out(db.events(db.connect(), args.limit), args)
+
+
+def cmd_workspaces(args):
+    from hill_lib import workspace
+    rows = workspace.scan()
+    if args.json:
+        return out(rows, args)
+    for w in rows:
+        flag = "dirty" if w["dirty"] else ("unpushed" if w["unpushed"] else "clean")
+        print(f"  {flag:<9} {w['branch'] or '-':<34} {w['path']}")
+
+
+def cmd_cleanup(args):
+    from hill_lib import workspace
+    res = workspace.cleanup(apply=args.apply)
+    if args.json:
+        return out(res, args)
+    for r in res["removed"]:
+        print(f"  removed  {r}")
+    for k in res["kept"]:
+        print(f"  kept     {k['path']}  — {k['reason']}")
+    if not args.apply:
+        print("\ndry run. nothing was deleted. pass --apply to remove the listed worktrees.")
+
+
+def cmd_review(args):
+    from hill_lib import review
+    body = ""
+    if args.body_file:
+        body = Path(args.body_file).read_text() if args.body_file != "-" else sys.stdin.read()
+    res = review.submit(repo=args.repo, pr=args.pr, head=args.head, verdict=args.verdict,
+                        agent=agent_id(args), body=body, dry_run=args.dry_run)
+    out(res, args)
+
+
+def cmd_board(args):
+    from hill_lib import collect, build
+    snap = collect.collect()
+    path = build.render(snap, open_after=args.open)
+    out({"board": str(path), "collected_at": snap.get("collected_at")}, args)
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(prog="hill", description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    # Accepted before or after the subcommand: `hill --json events` and
+    # `hill events --json` both work, because the second is what anyone types.
+    # SUPPRESS on the inherited copies matters: without it the subparser writes
+    # its own default over a flag given before the subcommand, so
+    # `hill --agent x tick` would silently lose the agent.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--agent", default=argparse.SUPPRESS,
+                        help="agent id (or set HILL_AGENT)")
+    common.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
+                        help="machine-readable output")
+    p.add_argument("--agent", default=None, help=argparse.SUPPRESS)
+    p.add_argument("--json", action="store_true", default=False, help=argparse.SUPPRESS)
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("version", parents=[common], help="where this checkout is and when it was updated")
+    s.set_defaults(fn=cmd_version)
+
+    s = sub.add_parser("tick", parents=[common], help="record that this agent is running")
+    s.add_argument("--session"); s.add_argument("--lane")
+    s.add_argument("--quota", help="anything known about remaining capacity")
+    s.set_defaults(fn=cmd_tick)
+
+    s = sub.add_parser("who", parents=[common], help="agents on this machine, their freshness and lanes")
+    s.set_defaults(fn=cmd_who)
+
+    s = sub.add_parser("claim", parents=[common], help="take a lane; atomic, so a race has one winner")
+    s.add_argument("key", help="<repo>#<lane>, e.g. blb-people#476")
+    s.add_argument("--note"); s.add_argument("--session")
+    s.add_argument("--take", action="store_true", help="take over a held lane (recorded)")
+    s.set_defaults(fn=cmd_claim)
+
+    s = sub.add_parser("release", parents=[common], help="give up a lane")
+    s.add_argument("key"); s.add_argument("--force", action="store_true")
+    s.set_defaults(fn=cmd_release)
+
+    s = sub.add_parser("claims", parents=[common], help="lanes currently held")
+    s.set_defaults(fn=cmd_claims)
+
+    s = sub.add_parser("send", parents=[common], help="queue a message for another agent")
+    s.add_argument("to"); s.add_argument("body", help="text, or - for stdin")
+    s.add_argument("--ref", help="the durable handoff this refers to (PR or issue URL)")
+    s.set_defaults(fn=cmd_send)
+
+    s = sub.add_parser("inbox", parents=[common], help="read messages addressed to this agent")
+    s.add_argument("--all", action="store_true"); s.add_argument("--peek", action="store_true")
+    s.set_defaults(fn=cmd_inbox)
+
+    s = sub.add_parser("events", parents=[common], help="recent local events")
+    s.add_argument("--limit", type=int, default=40)
+    s.set_defaults(fn=cmd_events)
+
+    s = sub.add_parser("workspaces", parents=[common], help="worktrees on this machine")
+    s.set_defaults(fn=cmd_workspaces)
+
+    s = sub.add_parser("cleanup", parents=[common], help="remove finished worktrees; never touches unpublished work")
+    s.add_argument("--apply", action="store_true")
+    s.set_defaults(fn=cmd_cleanup)
+
+    s = sub.add_parser("review", parents=[common], help="publish a canonical verdict so nobody types the markers")
+    s.add_argument("repo"); s.add_argument("pr", type=int)
+    s.add_argument("--head", required=True); s.add_argument("--verdict", required=True,
+                                                            choices=["accept", "changes"])
+    s.add_argument("--body-file"); s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(fn=cmd_review)
+
+    s = sub.add_parser("board", parents=[common], help="collect a snapshot and build the dashboard")
+    s.add_argument("--open", action="store_true")
+    s.set_defaults(fn=cmd_board)
+
+    args = p.parse_args(argv)
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main() or 0)
