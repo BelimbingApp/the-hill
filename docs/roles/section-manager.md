@@ -45,6 +45,11 @@ whole floor's.
 survives your harness going away. It does not wake anyone — they read it on
 their next `hill inbox`.
 
+**Covering for a missing Factory Manager.** If the Factory Manager is MIA —
+no action in more than one hour — you can take over that job until they
+return. Say so on the board. You still cannot halt the run or declare the
+mission accomplished.
+
 ## What you must not do
 
 - Do not claim lanes to keep your section busy. Idle is a report, not a failure.

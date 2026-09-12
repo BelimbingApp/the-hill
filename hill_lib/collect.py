@@ -125,15 +125,17 @@ def _run() -> dict:
         age_h = round((datetime.datetime.now(datetime.timezone.utc)
                        - datetime.datetime.fromisoformat(started.replace("Z", "+00:00"))
                        ).total_seconds() / 3600, 1)
+    author = ((got.get("user") or {}).get("login"))
     return {"configured": True, "board": f"{repo}#{number}",
             "mission": (got.get("title") or "").strip(),
             "started_at": started, "age_hours": age_h,
             "state": got.get("state"), "url": got.get("html_url"),
-            # A run ends when the mission is accomplished, and only the person
-            # who started it may halt it. Recorded so the board can name them,
-            # and so nothing here is tempted to decide it has finished.
-            "initiator": ((got.get("user") or {}).get("login")),
-            "ends": "when the mission is accomplished; only the initiator may halt it"}
+            # A run ends when the mission is accomplished, and only an owner
+            # may halt it. Recorded so the board can name them, and so nothing
+            # here is tempted to decide it has finished. The issue author is
+            # the owner we can see today; more than one human may own the run.
+            "owners": [author] if author else [],
+            "ends": "when the mission is accomplished; only an owner may halt it"}
 
 
 def collect():

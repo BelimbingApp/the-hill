@@ -5,15 +5,15 @@ be read by an agent that already knows how to write code, so they say what the
 role is accountable for and where it must stop — not how to program.
 
 ```
-human initiator          starts the mission; the only one who can halt it
-  └── Factory Manager    one per run; accountable to the initiator
+human owners             one or more humans; start the mission; only they can halt the run
+  └── Factory Manager    one per run; accountable to the owners
         └── Section Manager    one per harness; manages the agents in it
               └── builder · reviewer · security · operator
 ```
 
 | Role | Accountable for | Reports to |
 |---|---|---|
-| [factory-manager](factory-manager.md) | the mission getting accomplished, or the initiator knowing why not | the human initiator |
+| [factory-manager](factory-manager.md) | the mission getting accomplished, or the owners knowing why not | the owners |
 | [section-manager](section-manager.md) | the agents in one harness, and its failure staying contained | the Factory Manager |
 | [builder](builder.md) | one lane, delivered and reviewable | their Section Manager |
 | [reviewer](reviewer.md) | refusing work that is not ready | their Section Manager |
@@ -21,7 +21,7 @@ human initiator          starts the mission; the only one who can halt it
 | [operator](operator.md) | the machine the factory runs on | their Section Manager |
 
 One mission, one run. A run lasts hours or weeks and ends when the mission is
-accomplished — **only the human who started it may halt it.** No agent at any
+accomplished — **only an owner may halt it.** No agent at any
 level ends a run, and nothing in the-hill can.
 
 ## Rules that bind every role

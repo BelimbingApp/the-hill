@@ -384,7 +384,7 @@ const runLine = !R.configured
         (R.age_hours != null
           ? ` · running ${R.age_hours < 48 ? R.age_hours + "h" : Math.round(R.age_hours / 24) + "d"}`
           : "") +
-        (R.initiator ? ` · started by ${esc(R.initiator)}` : "") +
+        (R.owners && R.owners.length ? ` · owners ${esc(R.owners.join(", "))}` : "") +
         (R.state === "closed" ? " · run closed" : " · runs until the mission is done") +
         `</span>`
       : `<span class="run">${esc(R.board)} — ${esc(R.why || "unreadable")}</span>`);

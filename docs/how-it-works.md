@@ -12,19 +12,22 @@ Plain notes. What it is, what it does, what it refuses to do.
 ## Who does what
 
 ```
-human initiator          starts the mission; only one who can halt it
-  └── Factory Manager    one per run; answers to the initiator
+human owners             one or more humans; start the mission; only they can halt the run
+  └── Factory Manager    one per run; answers to the owners
         └── Section Manager    one per harness; runs the agents in it
               └── builder · reviewer · security · operator
 ```
 
-- **Factory Manager** — is the mission getting done? If not, does the initiator know why?
+- **Factory Manager** — is the mission getting done? If not, do the owners know why?
 - **Section Manager** — are my agents working? Is my harness's failure staying inside my harness?
+  - A Section Manager can sit on another machine. That machine's human can halt that section; they cannot halt the run.
+  - If the Factory Manager is MIA (no action in more than one hour), a Section Manager can take over that job until they return. Say so on the board.
   - Note: the tool cannot yet show one peer another peer's agents. See *Not built yet*.
 - **Builder** — one lane, finished so someone else can review it.
 - **Reviewer** — refuse work that is not ready.
 - **Security** — find what the others would wave through.
 - **Operator** — the machine itself: disk, liveness, credentials.
+- One agent can hold more than one role. The accountability of each still applies.
 - Prompts are in `docs/roles/`. Paste one at the top of an agent's instructions.
 
 ## Two rules for everyone
@@ -39,9 +42,9 @@ human initiator          starts the mission; only one who can halt it
 - The board issue **is** the run.
   - Its title is the mission.
   - Its creation date is the start.
-  - Its author is the initiator.
+  - Its author is an owner.
 - A run ends when the mission is accomplished.
-- **Only the human who started it can halt it.**
+- **Only an owner can halt the run.** A section on another machine can be halted by that machine's human; that does not end the run.
 - No agent ends a run. the-hill cannot end a run — a test enforces that.
 - Point at the run with `HILL_BOARD=owner/repo#123`.
 
@@ -51,10 +54,11 @@ human initiator          starts the mission; only one who can halt it
 - No server. No central coordinator. No single point of failure.
 - Each peer is independent.
 - One peer going down or hitting a rate limit does not stop the others.
+- If the Factory Manager is MIA — no action in more than one hour (default) or as defined by the owners (override) — a Section Manager can take over the factory-manager job until they return. Say so on the board.
 - Each peer has its own dashboard.
   - It shows **this peer**: agents here, workspaces, disk, token usage.
-  - It shows **the floor**: the run, every lane, every repository, all agents.
-  - Every section is labelled, so you always know which you are reading.
+  - It shows **the factory**: the run, every lane, every repository, all agents.
+  - Every section is labelled with the Section Manager's id, so you always know which you are reading.
 
 ## GitHub does the sharing
 
@@ -65,9 +69,15 @@ human initiator          starts the mission; only one who can halt it
 | What shipped, and who reviewed it | GitHub |
 | Who holds a lane | GitHub: the `agent:<id>` label and open pull requests |
 | Messages between machines | GitHub: comments on the board issue |
+| Who is on the floor, and when they last delivered | GitHub: agent labels, merges, verdicts |
 | Races between agents on one machine | SQLite, local |
 | This machine's disk and usage | Local files |
 
+- An agent is visible through its work, the way ai-team does it. Its `agent:<id>`
+  label is on the issue or pull request; its verdicts are reviews. Nothing has to
+  broadcast "I am alive" — the board reads 47 agents across the floor this way.
+- `hill who` is machine-local on purpose. It answers "who is in **my** harness",
+  which is a Section Manager's question. The floor view is the board.
 - Rule: SQLite holds observations and messages. Never decisions.
 - If two places can answer "is this approved", they will disagree.
 
@@ -110,10 +120,6 @@ human initiator          starts the mission; only one who can halt it
 
 Written down so nobody reads the list above as more than it is.
 
-- **Peers cannot see each other's agents.**
-  - `hill who` shows agents on this machine only.
-  - The code to publish a peer's liveness to the board exists. No command calls it.
-  - So a Factory Manager cannot yet tell that another harness went quiet.
 - **No git remote.**
   - There is one copy, on one disk.
   - `git clone` and `git pull` have nothing to point at.
