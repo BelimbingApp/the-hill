@@ -39,6 +39,69 @@ def agent_of(labels):
 
 
 
+GATE_CHECK = "Independent review"
+
+
+def waiting_on(draft, red, pending, mergeable_state, head_verdict_):
+    """Who the lane is actually waiting on.
+
+    The review gate is not CI. Bucketing it as CI sends a reader off to hunt for
+    a broken test when the lane is in fact waiting on a person -- which is what
+    this board reported for blb-people#483, the first live lane it ever saw.
+    """
+    broken = [n for n in red if n != GATE_CHECK]
+    gate_red = GATE_CHECK in red
+    if draft:
+        return "author (draft)"
+    if broken:
+        return "CI"
+    if gate_red and head_verdict_ == "changes":
+        return "author (changes requested)"
+    if gate_red and head_verdict_ == "accept":
+        return "gate disagrees (accept at head, gate red)"
+    if gate_red:
+        return "a reviewer (none at this head)"
+    if pending:
+        return "CI (running)"
+    if mergeable_state == "blocked":
+        return "human (approval)"
+    if mergeable_state == "clean":
+        return "nothing — landable"
+    return "unknown"
+
+
+_FROM = re.compile(r"^\**\s*From\s*:\**\s*(.+?)\s*$", re.M)
+_VERD = re.compile(r"^\**\s*Verdict\s*:\**\s*(.+?)\s*$", re.M)
+# The gate binds a verdict to a head through BOTH the marker and the review's
+# commit_id, because a rebase can rewrite commit_id on an older review.
+_HEADM = re.compile(r"^\**\s*HEAD reviewed\s*:\**\s*`?([0-9a-f]{40})`?\s*$", re.M | re.I)
+
+
+def head_verdict(gh, full, number, sha, author):
+    """Is there a verdict from someone other than the author, bound to THIS head?
+
+    Deliberately weaker than review_gate.sh and not a second copy of it: the
+    gate also handles carry-forward across a clean base merge, reviewer-supplied
+    finding tests, and unbound approvals. This answers only "has anyone looked at
+    this exact commit yet", which is what separates "waiting on a reviewer" from
+    "waiting on the author". Where the two disagree, the gate is right and the
+    disagreement is itself worth surfacing -- so it is, as "gate disagrees".
+    """
+    if not sha:
+        return None
+    for r in (gh(f"repos/{full}/pulls/{number}/reviews?per_page=100") or []):
+        if r.get("state") == "DISMISSED" or r.get("commit_id") != sha:
+            continue
+        body = r.get("body") or ""
+        mf, mv, mh = _FROM.search(body), _VERD.search(body), _HEADM.search(body)
+        if not (mf and mv and mh and mh.group(1) == sha):
+            continue
+        if mf.group(1).strip().strip("*").strip() == author:
+            continue
+        return "accept" if "accept" in mv.group(1).lower() or "approve" in mv.group(1).lower() else "changes"
+    return None
+
+
 def collect():
     now = datetime.datetime.now(datetime.timezone.utc)
     snap = {
@@ -70,16 +133,15 @@ def collect():
             ms = det.get("mergeable_state") or "unknown"
             updated = pr["updated_at"]
             age_h = round((now - datetime.datetime.fromisoformat(updated.replace("Z", "+00:00"))).total_seconds() / 3600, 1)
-            if pr.get("draft"): waiting = "author (draft)"
-            elif red: waiting = "CI"
-            elif pending: waiting = "CI (running)"
-            elif ms == "blocked": waiting = "human (approval)"
-            elif ms == "clean": waiting = "nothing — landable"
-            else: waiting = "unknown"
+            hv = (head_verdict(gh, full, pr["number"], sha, agent)
+                  if GATE_CHECK in red else None)
+            waiting = waiting_on(pr.get("draft", False), red, pending, ms, hv)
             snap["open_lanes"].append({
-                "repo": short, "number": pr["number"], "title": pr["title"][:80],
+                "repo": short, "number": pr["number"],
+                "title": pr["title"][:80] + ("…" if len(pr["title"]) > 80 else ""),
                 "agent": agent, "draft": pr.get("draft", False), "state": ms,
                 "red": red, "pending": pending, "waiting_on": waiting,
+                "head_verdict": hv,
                 "idle_hours": age_h, "labels": labels, "url": pr["html_url"],
             })
         closed = gh(f"repos/{full}/pulls?state=closed&sort=updated&direction=desc&per_page=100") or []
@@ -115,8 +177,7 @@ def collect():
     snap["coverage_from"] = max(_h) if _h else None
 
     # ---- verdicts given, over the recent set ------------------------------------
-    FROM = re.compile(r"^\**\s*From\s*:\**\s*(.+?)\s*$", re.M)
-    VERD = re.compile(r"^\**\s*Verdict\s*:\**\s*(.+?)\s*$", re.M)
+    FROM, VERD = _FROM, _VERD
     for full in REPOS:
         short = full.split("/")[1]
         closed = gh(f"repos/{full}/pulls?state=closed&sort=updated&direction=desc&per_page=25") or []
@@ -269,8 +330,11 @@ def collect():
 
     # ---- coverage declarations (what each number does NOT check) -----------------
     snap["coverage"] = [
-      {"signal": "waiting_on", "checks": "draft flag, latest check-run per name, mergeable_state",
-       "not_checked": "whether a human intends to act; whether a reviewer is reachable or rate-limited"},
+      {"signal": "waiting_on", "checks": "draft flag, latest check-run per name, mergeable_state, and — when the "
+                 "review gate is red — whether any non-author verdict marker is bound to the exact head",
+       "not_checked": "whether a human intends to act; whether a reviewer is reachable or rate-limited. "
+                 "The head-verdict scan is NOT review_gate.sh: it ignores carry-forward across a clean base "
+                 "merge, finding-test clearance, and unbound approvals, so the gate can and does overrule it"},
       {"signal": "landable", "checks": "mergeable_state == clean AND no red checks",
        "not_checked": "the AI Team review gate — a PR can be clean here and refused by review_gate.sh"},
       {"signal": "merged counts", "checks": "merged_at on the most recent 100 closed PRs per repo",

@@ -1,7 +1,18 @@
 # Runtime state. Local to this machine, never shared, never committed.
-state/          # SQLite: claims and messages
-live/           # one liveness file per agent
-board/          # generated dashboards
-worktrees/      # agent working copies
+#
+# Comments go on their own line. Git has no trailing-comment syntax: a
+# "state/  # SQLite" line is one pattern, trailing text and all, and silently
+# matches nothing -- which is how the database and every board snapshot came
+# to be committed here in the first place.
+
+# SQLite: claims and messages
+state/
+# one liveness file per agent
+live/
+# generated dashboards
+board/
+# agent working copies
+worktrees/
+
 __pycache__/
 *.pyc
