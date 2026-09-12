@@ -57,6 +57,13 @@ force-push.
 **A stale liveness record means unknown, not stopped.** An agent can be alive and
 idle, or gone and recently ticked. Nothing here reports an agent as dead.
 
+**A red review gate is not a failing test.** `Independent review` goes red the
+moment a pull request opens, because nobody has reviewed it yet. The board
+therefore reports it as *a reviewer*, never as CI. Where it says *gate
+disagrees*, it found an acceptance bound to the head and the gate refused the
+pull request anyway — trust the gate and go read its log, because the board's
+scan is the weaker of the two and knows it.
+
 **Cleanup refuses to delete work that was never published.** Uncommitted files or
 unpushed commits mean the worktree is kept, and it handles squash merges — a
 squash-merged branch is not an ancestor of main, so a naive check would call
@@ -76,5 +83,6 @@ Figures name their source. Where a source cannot answer, the board says
     python3 -m unittest discover -s tests
 
 They cover the things that can destroy or lose work — a lane claimed twice, a
-message read by nobody, a cleanup that deletes unpublished work — and nothing
-else. This is the floor, not a suite to grow for its own sake.
+message read by nobody, a cleanup that deletes unpublished work — and the one
+board signal that has already misreported a real lane, which is who a lane is
+waiting on. This is the floor, not a suite to grow for its own sake.
