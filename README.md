@@ -3,205 +3,30 @@
 **An app for running a software factory.**
 
 A team of agents is not a pool of assistants answering questions. It is a shift
-on a floor, working a mission: a body of software that has to get built,
-reviewed and shipped, by agents that come and go, across several repositories,
-without a human holding every thread.
+on a floor, working a mission: software that has to get built, reviewed and
+shipped, by agents that come and go, across several repositories, without a
+person holding every thread.
 
 the-hill is what that shift runs on. It answers the questions a floor manager
-asks and nothing else:
+asks, and nothing else:
 
 - What is every lane waiting on, and is that thing going to happen?
 - Who is working, who is stuck, who has gone quiet?
 - What shipped, what was refused, and by whom?
 - What on this machine is holding work nobody has saved?
 
-**The board is the point.** `hill serve` puts a live display on a screen — the
-real thing on a production floor, refreshing itself, stating how old it is,
-going amber when a refresh stops landing. Not a report someone remembers to
-run.
+It **assists delivery and never gates it**. It adds no required check to any
+repository, and it cannot block a merge. If it breaks, or you throw it away,
+your repositories keep working exactly as before.
 
-One checkout per machine at `~/.the-hill`. There is no version number and no
-release process — `hill version` tells you when the checkout was last updated.
-
-> **This checkout has no git remote yet.** It is a local repository on one
-> machine, so there is nowhere to clone it from and `git pull` has nothing to
-> fetch. The per-machine model below is how it is meant to work once a remote
-> exists; until someone pushes it somewhere, copy the directory to get it onto
-> a second machine. `git remote -v` tells you whether this still applies.
-
-## Requirements
-
-- **Python 3**, standard library only. Nothing to install, no virtualenv, no
-  `requirements.txt`. Exercised on 3.12 and 3.14; the modules that use `X | None`
-  all carry `from __future__ import annotations`, so older 3.x should work, but
-  those two are the versions it has actually been run on.
-- **git**, on `PATH`.
-- **[`gh`](https://cli.github.com/), authenticated.** `hill board` and
-  `hill review` read and write GitHub through it. Check with `gh auth status`.
-  The local commands — `claim`, `send`, `who`, `workspaces` — do not need it.
-- `du` for workspace sizes, and `xdg-open` (or `open` on macOS) for
-  `hill board --open`. Both are optional; without them you get a size of
-  `unknown` and a path to open yourself.
-
-## Setup
-
-```bash
-# once a remote exists:
-git clone <remote> ~/.the-hill
-# today, from the machine that has it:
-cp -a /path/to/the-hill ~/.the-hill
-
-cd ~/.the-hill
-./hill version          # confirms where the checkout is and when it was updated
-```
-
-`hill version` reports `local_edits` so you can tell a checkout you have
-changed from one you have not.
-
-Put it on your `PATH` and name yourself once, in your shell profile:
-
-```bash
-export PATH="$HOME/.the-hill:$PATH"
-export HILL_AGENT=your-agent-id
-```
-
-`HILL_AGENT` is the id every command attributes work to; with it set you can
-drop `--agent` everywhere. Then check it works:
-
-```bash
-hill tick               # record that you are running
-hill who                # you should see yourself, fresh
-```
-
-Nothing is created until first use. `state/`, `live/` and `board/` are written
-on demand and are all git-ignored: they are local to this machine and are never
-committed.
-
-## A normal session
-
-```bash
-hill tick                        # say you are alive, at the top of each cycle
-hill who                         # who else is on this machine
-hill claims                      # what is already held
-hill claim blb-people#476        # take a lane; a race has exactly one winner
-# ... do the work ...
-hill inbox                       # anything queued for you
-hill release blb-people#476      # give it back
-```
-
-`hill tick` is worth running every cycle rather than only when you touch the
-board. Liveness is a snapshot, not a history — if you stop ticking, the record
-goes stale and nobody can tell whether you are working or gone.
-
-## The roles
-
-A factory needs people who are accountable for different things, and an agent
-does whichever job its prompt tells it to. Those prompts live in
-[`docs/roles/`](docs/roles/):
-
-| Role | Accountable for |
-|---|---|
-| [steward](docs/roles/steward.md) | the board moving at all |
-| [builder](docs/roles/builder.md) | one lane, delivered and reviewable |
-| [reviewer](docs/roles/reviewer.md) | refusing work that is not ready |
-| [security](docs/roles/security.md) | what the other three would wave through |
-| [operator](docs/roles/operator.md) | the machine the factory runs on |
-
-Paste one at the top of an agent's instructions. They say what the role owns
-and where it must stop; they do not explain how to write code.
-
-Two rules bind every role, and most incidents come from breaking one of them:
-**never review your own lane**, and **say what you measured, not what you
-expect**.
-
-## What it does and does not do
-
-the-hill **helps agents deliver**. It does not stand between you and a merge.
-
-- It never adds a required check to a product repository.
-- It never blocks a merge. If the-hill is broken, your repositories keep working.
-- You can always merge by hand on GitHub. Nothing here will stop you.
-
-Three kinds of information, kept in three places on purpose:
-
-| What | Where | Why |
-|---|---|---|
-| What was delivered and reviewed | GitHub | It is already the record, and it works across machines |
-| Who holds which lane, across machines | GitHub: the `agent:<id>` label and the open-PR registry | It is the only thing every machine can see |
-| Races between agents on **one** machine, and messages | SQLite, `state/hill.db` | Several local agents write at once, so it needs real locking |
-| Liveness and capacity | one file per agent in `live/` | Each agent writes only its own file, so no locking is needed |
-
-The rule that keeps this honest: SQLite holds **observations and messages, never
-decisions**. The moment it can answer "is this approved", two places answer the
-same question and they will disagree.
-
-## Commands
-
-    hill tick --agent me            record that you are running
-    hill who                        who is on this machine, and how fresh
-    hill claim blb-people#476       take a lane (atomic — a race has one winner)
-    hill claim blb-people#476 --take   take over a lane someone else holds
-    hill release blb-people#476     give it up
-    hill claims                     what is held right now
-    hill send astra "text" --ref URL   queue a message
-    hill inbox --agent me           read your messages
-    hill workspaces                 worktrees on this machine
-    hill cleanup                    show what could be removed (dry run)
-    hill cleanup --apply            actually remove them
-    hill review <repo> <pr> --head <sha> --verdict accept    post a verdict
-    hill board --open               build one snapshot to a file
-    hill serve                      run the live board on localhost:8787
-
-Set `HILL_AGENT` once and you can drop `--agent`.
-
-## Things that will bite you if you forget them
-
-**A message does not wake anyone.** `hill send` puts it in a mailbox. If the
-recipient is a Claude Code session, use that harness's own messaging to wake it.
-Otherwise the message waits until the agent next runs `hill inbox`.
-
-**A claim is checked against GitHub, not just this machine.** `hill claim`
-reads the two sources ai-team's `claim.sh` reads — the issue's `agent:<id>`
-label, and any open pull request referencing `(#N)` — and refuses a lane
-somebody else holds, naming them and where it saw them. A local SQLite claim
-is an observation about one host; it cannot settle anything between machines,
-because no other machine can read it.
-
-Neither source is a lock. There is a window between the read and your write,
-and ai-team does not pretend otherwise: a collision is *detected and named*,
-not prevented. If GitHub cannot be read the claim is **refused**, because
-unreachable is not the same as free — `--local` overrides that and says so.
-
-**Taking a lane does not stop the other agent.** `--take` records the takeover so
-it is visible, but it cannot fence a writer. Two agents can still be writing. Keep
-their unpushed work, re-check the branch immediately before you push, and never
-force-push.
-
-**A stale liveness record means unknown, not stopped.** An agent can be alive and
-idle, or gone and recently ticked. Nothing here reports an agent as dead.
-
-**A red review gate is not a failing test.** `Independent review` goes red the
-moment a pull request opens, because nobody has reviewed it yet. The board
-therefore reports it as *a reviewer*, never as CI. Where it says *gate
-disagrees*, it found an acceptance bound to the head and the gate refused the
-pull request anyway — trust the gate and go read its log, because the board's
-scan is the weaker of the two and knows it.
-
-**A workspace git cannot read is shown, not skipped.** An orphaned worktree —
-one whose parent clone was deleted, so its `.git` file points at an admin
-directory that no longer exists — is listed as `unreadable` and never offered
-for removal. It is reported rather than omitted because the tool's whole job is
-saying what is on the disk, and the largest reclaimable thing on this machine
-was invisible to it for four days. Note that a fresh repository whose branch
-has no commits yet also has no resolvable head; that is not unreadable, and it
-can hold uncommitted work.
-
-**Cleanup refuses to delete work that was never published.** Uncommitted files or
-unpushed commits mean the worktree is kept, and it handles squash merges — a
-squash-merged branch is not an ancestor of main, so a naive check would call
-delivered work undelivered and a naive cleanup would then delete it.
+> **Agents: read [AGENTS.md](AGENTS.md), not this file.** This one is for the
+> person running the floor.
 
 ## The board
+
+The reason to install it. `hill serve` puts a live display on a screen — the
+real thing on a production floor, refreshing itself, stating how old it is, and
+turning amber the moment a refresh stops landing.
 
 ### Running it (what you want)
 
@@ -263,14 +88,107 @@ Figures name their source. Where a source cannot answer, the board says
 **unknown** rather than showing zero — the distinction between *measured zero*
 and *not measured* is the whole reason to trust anything else on the page.
 
+## Getting it running
+
+- **Python 3**, standard library only. Nothing to install, no virtualenv, no
+  `requirements.txt`. Exercised on 3.12 and 3.14; the modules that use `X | None`
+  all carry `from __future__ import annotations`, so older 3.x should work, but
+  those two are the versions it has actually been run on.
+- **git**, on `PATH`.
+- **[`gh`](https://cli.github.com/), authenticated.** `hill board`, `hill
+  review` and `hill claim` all read GitHub through it — claim included, because
+  who holds a lane is a question only GitHub can answer across machines. Check
+  with `gh auth status`. Purely local commands — `send`, `inbox`, `who`,
+  `workspaces`, `cleanup` — do not need it, and `hill claim --local` skips the
+  check when you accept that the shared floor goes unread.
+- `du` for workspace sizes, and `xdg-open` (or `open` on macOS) for
+  `hill board --open`. Both are optional; without them you get a size of
+  `unknown` and a path to open yourself.
+
+**This checkout has no git remote yet.** It is a local repository on one
+machine, so there is nowhere to clone from and `git pull` has nothing to fetch.
+Copy the directory to get it onto a second machine until someone pushes it
+somewhere; `git remote -v` tells you whether that is still true.
+
+```bash
+# once a remote exists:
+git clone <remote> ~/.the-hill
+# today, from the machine that has it:
+cp -a /path/to/the-hill ~/.the-hill
+
+cd ~/.the-hill
+./hill version          # confirms where the checkout is and when it was updated
+```
+
+`hill version` reports `local_edits` so you can tell a checkout you have
+changed from one you have not.
+
+Put it on your `PATH` and name yourself once, in your shell profile:
+
+```bash
+export PATH="$HOME/.the-hill:$PATH"
+export HILL_AGENT=your-agent-id
+```
+
+`HILL_AGENT` is the id every command attributes work to; with it set you can
+drop `--agent` everywhere. Then check it works:
+
+```bash
+hill tick               # record that you are running
+hill who                # you should see yourself, fresh
+```
+
+Nothing is created until first use. `state/`, `live/` and `board/` are written
+on demand and are all git-ignored: they are local to this machine and are never
+committed.
+
+## Who does what
+
+An agent does whichever job its prompt gives it. The prompts are in
+[`docs/roles/`](docs/roles/):
+
+| Role | Accountable for |
+|---|---|
+| [steward](docs/roles/steward.md) | the board moving at all |
+| [builder](docs/roles/builder.md) | one lane, delivered and reviewable |
+| [reviewer](docs/roles/reviewer.md) | refusing work that is not ready |
+| [security](docs/roles/security.md) | what the other three would wave through |
+| [operator](docs/roles/operator.md) | the machine the factory runs on |
+
+Paste one at the top of an agent's instructions. They say what the role owns
+and where it must stop; they do not explain how to write code.
+
+Two rules bind every role, and most incidents come from breaking one:
+**never review your own lane**, and **say what you measured, not what you
+expect**.
+
+## How it keeps its facts straight
+
+Four kinds of information, in three places, chosen deliberately:
+
+| What | Where | Why |
+|---|---|---|
+| What was delivered and reviewed | GitHub | It is already the record, and it works across machines |
+| Who holds which lane, across machines | GitHub: the `agent:<id>` label and the open-PR registry | It is the only thing every machine can see |
+| Races between agents on **one** machine, and messages | SQLite, `state/hill.db` | Several local agents write at once, so it needs real locking |
+| Liveness and capacity | one file per agent in `live/` | Each agent writes only its own file, so no locking is needed |
+
+The rule that keeps it honest: SQLite holds **observations and messages, never
+decisions**. The moment it can answer "is this approved", two places answer the
+same question and they will disagree.
+
+A consequence worth knowing before you trust the board: where a source cannot
+answer, it says **unknown** rather than showing zero. Distinguishing *measured
+zero* from *not measured* is the reason to believe anything else on the page.
+
 ## Tests
 
     python3 -m unittest discover -s tests
 
-Add `-v` to see the names. They cover the things that can destroy or lose work — a lane claimed twice, a
-message read by nobody, a cleanup that deletes unpublished work — and the one
-board signal that has already misreported a real lane, which is who a lane is
-waiting on. This is the floor, not a suite to grow for its own sake.
+Add `-v` to see the names. They cover the things that can destroy or lose work
+— a lane claimed twice, a message read by nobody, a cleanup that deletes
+unpublished work — and every signal that has already misreported something
+real. This is the floor, not a suite to grow for its own sake.
 
 ## Licence
 
