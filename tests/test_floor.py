@@ -235,3 +235,59 @@ class NoRunControlTest(unittest.TestCase):
             with self.subTest(path=path.name):
                 self.assertNotIn("issue edit", text,
                                  f"{path.name} edits an issue; the run is not ours to rewrite")
+
+
+class MissionsTest(unittest.TestCase):
+    """the-hill holds more than one mission. One mission is still one run.
+
+    The register lives on GitHub -- an open issue carrying a label -- because a
+    local list would have to be kept in step on every peer and would be wrong
+    on one of them.
+    """
+
+    def missions(self, per_repo):
+        def fake(args):
+            repo = args[args.index("--repo") + 1]
+            rows = per_repo.get(repo)
+            if rows is None:
+                raise floor.Unreachable("HTTP 404")
+            return json.dumps(rows)
+        with mock.patch.object(floor, "_gh", side_effect=fake):
+            return floor.missions(list(per_repo))
+
+    def row(self, n, title, created, author="kiatng", labels=()):
+        return {"number": n, "title": title, "url": f"u/{n}", "createdAt": created,
+                "author": {"login": author},
+                "labels": [{"name": x} for x in labels]}
+
+    def test_several_missions_across_repositories(self):
+        got = self.missions({
+            "Owner/a": [self.row(1, "drain the backlog", "2026-09-01T00:00:00Z")],
+            "Owner/b": [self.row(7, "ship the portal", "2026-09-05T00:00:00Z")],
+        })
+        self.assertEqual([m["board"] for m in got["missions"]], ["Owner/a#1", "Owner/b#7"])
+
+    def test_missions_are_ordered_oldest_first_so_two_runs_read_the_same(self):
+        got = self.missions({"Owner/a": [
+            self.row(9, "later", "2026-09-09T00:00:00Z"),
+            self.row(2, "earlier", "2026-09-02T00:00:00Z")]})
+        self.assertEqual([m["mission"] for m in got["missions"]], ["earlier", "later"])
+
+    def test_owners_and_agents_come_through(self):
+        got = self.missions({"Owner/a": [
+            self.row(1, "m", "2026-09-01T00:00:00Z", author="kiatng",
+                     labels=("agent:opus-max", "ops:mission"))]})
+        m = got["missions"][0]
+        self.assertEqual(m["owners"], ["kiatng"])
+        self.assertEqual(m["agents"], ["opus-max"])
+
+    def test_a_repository_that_cannot_be_read_is_named_not_dropped(self):
+        got = self.missions({"Owner/a": [self.row(1, "m", "2026-09-01T00:00:00Z")],
+                             "Owner/gone": None})
+        self.assertEqual([u["repo"] for u in got["unreachable"]], ["Owner/gone"])
+        self.assertEqual(len(got["missions"]), 1)
+
+    def test_no_missions_is_empty_not_an_error(self):
+        got = self.missions({"Owner/a": []})
+        self.assertEqual(got["missions"], [])
+        self.assertEqual(got["unreachable"], [])

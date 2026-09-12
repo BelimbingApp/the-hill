@@ -330,6 +330,34 @@ def cmd_board(args):
     out({"board": str(path), "collected_at": snap.get("collected_at")}, args)
 
 
+def cmd_missions(args):
+    from hill_lib import floor, mail
+    state = floor.missions()
+    here = mail.board()
+    current = f"{here[0]}#{here[1]}" if here else None
+
+    if args.json:
+        return out({**state, "current": current}, args)
+
+    if not state["missions"]:
+        print(f"no open issue carries the label {state['label']}.")
+        print("  a mission is an issue with that label; add it to the board issue")
+        print(f"  or point HILL_MISSION_LABEL at the label you already use")
+    for m in state["missions"]:
+        mark = " <- yours" if m["board"] == current else ""
+        who = ", ".join(m["owners"]) or "unknown"
+        print(f"  {m['board']:<32} {m['mission'][:52]}")
+        print(f"      started {(m['started_at'] or '?')[:10]} by {who}"
+              + (f"  agents: {', '.join(m['agents'])}" if m["agents"] else "") + mark)
+    for bad in state["unreachable"]:
+        # A repository that could not be read must not look like one with no
+        # missions on it.
+        print(f"  {bad['repo']}: could not read — {bad['why']}")
+    if current and not any(m["board"] == current for m in state["missions"]):
+        print(f"\nHILL_BOARD is {current}, which is not in that list —")
+        print("  either it is not labelled as a mission, or you are pointed at the wrong issue")
+
+
 def cmd_serve(args):
     from hill_lib import server
     server.serve(host=args.host, port=args.port, interval=args.interval)
@@ -425,6 +453,10 @@ def main(argv=None):
     s.add_argument("--archive", action="store_true",
                    help="also keep this build under its own timestamp")
     s.set_defaults(fn=cmd_board)
+
+    s = sub.add_parser("missions", parents=[common],
+                       help="missions this floor is running")
+    s.set_defaults(fn=cmd_missions)
 
     s = sub.add_parser("serve", parents=[common],
                        help="run the board as a live app that refreshes itself")

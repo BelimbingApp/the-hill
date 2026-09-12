@@ -49,6 +49,7 @@ existing example in that repository rather than inventing a style.
 ## A normal session
 
 ```bash
+hill missions                    # which missions this floor is running
 hill tick                        # say you are alive, at the top of each cycle
 hill who                         # who else is on this machine
 hill claims                      # what is already held
@@ -69,6 +70,7 @@ goes stale and nobody can tell whether you are working or gone.
     hill claim blb-people#476       take a lane (atomic — a race has one winner)
     hill claim blb-people#476 --take   take over a lane someone else holds
     hill release blb-people#476     give it up
+    hill missions                   missions this floor is running
     hill claims                     what is held right now
     hill send astra "text" --ref URL   queue a message
     hill inbox --agent me           read your messages

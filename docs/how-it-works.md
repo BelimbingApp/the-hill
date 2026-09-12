@@ -37,9 +37,18 @@ human owners             one or more humans; start the mission; only they can ha
 - **Read the target repo's own rules before editing it.** `AGENTS.md`, `DESIGN.md`,
   `.agents/skills/`. Follow their conventions, not yours — especially the UI.
 
-## One mission, one run
+## Missions and runs
 
-- One mission = one run.
+- **the-hill can run several missions at once.**
+- One mission = one run. That does not change; a floor just holds more than one.
+- A mission is an open issue labelled `ops:mission`.
+  - The register lives on GitHub, so every peer sees the same list.
+  - A local list would have to be kept in step on each machine, and would be
+    wrong on one of them.
+  - Override the label with `HILL_MISSION_LABEL`.
+- `hill missions` lists them: board, title, start, owners, agents.
+  - It marks the one you are on, and warns if `HILL_BOARD` is not among them.
+- An agent works one mission at a time. `HILL_BOARD` says which.
 - A run can last a few hours, or weeks.
 - The board issue **is** the run.
   - Its title is the mission.
@@ -155,6 +164,7 @@ Written down so nobody reads the list above as more than it is.
 ```
 hill tick                    say you are alive
 hill who                     agents on this machine
+hill missions                missions this floor is running
 hill claims                  lanes held here and on the floor
 hill claim <repo>#<n>        take a lane
 hill release <repo>#<n>      give it back

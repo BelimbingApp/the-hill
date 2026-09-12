@@ -26,6 +26,7 @@ it" is how two machines end up on one lane.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 
@@ -168,3 +169,44 @@ def lanes(repos: list[str] | None = None) -> dict:
                 })
     held.sort(key=lambda r: (r["repo"], r["number"]))
     return {"held": held, "unreachable": unreachable, "repos": list(repos)}
+
+
+MISSION_LABEL = os.environ.get("HILL_MISSION_LABEL", "ops:mission")
+
+
+def missions(repos: list[str] | None = None) -> dict:
+    """Every mission this floor is running.
+
+    the-hill holds more than one. A mission is an open issue labelled
+    `ops:mission` (override with HILL_MISSION_LABEL), which keeps the register
+    on GitHub where every peer already looks -- a local list would have to be
+    kept in step on each machine, and would be wrong on one of them.
+
+    One mission is still one run. What this adds is that a floor can be
+    running several at once, and an agent works whichever one HILL_BOARD names.
+    """
+    if repos is None:
+        from .collect import REPOS
+        repos = REPOS
+
+    found, unreachable = [], []
+    for repo in repos:
+        try:
+            rows = json.loads(_gh([
+                "issue", "list", "--repo", repo, "--state", "open",
+                "--label", MISSION_LABEL, "--limit", "50",
+                "--json", "number,title,url,createdAt,author,labels"]) or "[]")
+        except Unreachable as exc:
+            unreachable.append({"repo": repo, "why": str(exc)})
+            continue
+        for row in rows:
+            found.append({
+                "board": f"{repo}#{row['number']}",
+                "mission": (row.get("title") or "").strip(),
+                "url": row.get("url"),
+                "started_at": row.get("createdAt"),
+                "owners": [(row.get("author") or {}).get("login")] if row.get("author") else [],
+                "agents": _agent_labels(row.get("labels")),
+            })
+    found.sort(key=lambda m: m["started_at"] or "")
+    return {"missions": found, "unreachable": unreachable, "label": MISSION_LABEL}
