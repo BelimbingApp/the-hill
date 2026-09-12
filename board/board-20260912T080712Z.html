@@ -1,0 +1,597 @@
+<title>Hill Floor Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#F2F5F5; --surface:#FFFFFF; --sunk:#E9EEED;
+  --ink:#14201F; --body:#33403E; --muted:#5F6E6C; --faint:#8A9895;
+  --line:#D8E0DF; --line-strong:#BCC9C7;
+  --accent:#0E6E7A; --accent-ink:#0A555F; --accent-wash:#E2EFF1;
+  --run:#2E7D4F; --attn:#9A6B12; --stop:#A33028; --unknown:#74807C;
+  --run-wash:#E4F0E9; --attn-wash:#F6EEDC; --stop-wash:#F7E6E4; --unknown-wash:#EAEDEC;
+  --display:"Barlow Condensed",Haettenschweiler,"Arial Narrow",sans-serif;
+  --sans:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#0E1516; --surface:#141D1E; --sunk:#0A1112;
+  --ink:#E8EFEE; --body:#C3D0CE; --muted:#93A29F; --faint:#6E7D7A;
+  --line:#22302F; --line-strong:#324240;
+  --accent:#3FA9B6; --accent-ink:#8FD3DC; --accent-wash:#123034;
+  --run:#4FA873; --attn:#C79A3C; --stop:#D2695C; --unknown:#8A9896;
+  --run-wash:#132A20; --attn-wash:#2C2415; --stop-wash:#2E1A18; --unknown-wash:#1A2322;
+}}
+:root[data-theme="dark"]{
+  --ground:#0E1516; --surface:#141D1E; --sunk:#0A1112;
+  --ink:#E8EFEE; --body:#C3D0CE; --muted:#93A29F; --faint:#6E7D7A;
+  --line:#22302F; --line-strong:#324240;
+  --accent:#3FA9B6; --accent-ink:#8FD3DC; --accent-wash:#123034;
+  --run:#4FA873; --attn:#C79A3C; --stop:#D2695C; --unknown:#8A9896;
+  --run-wash:#132A20; --attn-wash:#2C2415; --stop-wash:#2E1A18; --unknown-wash:#1A2322;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--body);font-family:var(--sans);
+  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 22px 72px}
+h1,h2,h3{color:var(--ink);margin:0;text-wrap:balance}
+.eyebrow{font-family:var(--display);text-transform:uppercase;letter-spacing:.09em;
+  font-weight:600;font-size:13px;color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* masthead ---------------------------------------------------------------- */
+.mast{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px 28px;
+  padding-bottom:18px;border-bottom:2px solid var(--ink)}
+.mast h1{font-family:var(--display);font-size:44px;line-height:.95;font-weight:700;
+  letter-spacing:.01em;text-transform:uppercase}
+.mast .sub{color:var(--muted);font-size:13.5px;max-width:46ch}
+.mast .meta{margin-left:auto;text-align:right;font-family:var(--mono);
+  font-size:12px;color:var(--muted);line-height:1.7}
+.mast .meta b{color:var(--ink);font-weight:600}
+
+/* the answer strip -------------------------------------------------------- */
+.answer{margin-top:22px;display:grid;grid-template-columns:auto 1fr;gap:20px;
+  align-items:center;padding:20px 22px;background:var(--surface);
+  border:1px solid var(--line);border-left:6px solid var(--run)}
+.answer.warn{border-left-color:var(--attn)}
+.lamp{width:46px;height:46px;border-radius:50%;background:var(--run-wash);
+  border:2px solid var(--run);display:grid;place-items:center}
+.lamp span{width:16px;height:16px;border-radius:50%;background:var(--run)}
+.answer h2{font-family:var(--display);font-size:27px;text-transform:uppercase;
+  letter-spacing:.02em;line-height:1.05}
+.answer p{margin:4px 0 0;color:var(--muted);font-size:13.5px}
+
+/* stat row ---------------------------------------------------------------- */
+.stats{margin-top:18px;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  background:var(--line);border:1px solid var(--line)}
+.stat{background:var(--surface);padding:14px 16px}
+.stat .k{font-family:var(--display);text-transform:uppercase;letter-spacing:.08em;
+  font-size:11.5px;color:var(--muted);font-weight:600}
+.stat .v{font-family:var(--mono);font-size:28px;font-weight:600;color:var(--ink);
+  line-height:1.15;font-variant-numeric:tabular-nums}
+.stat .n{font-size:12px;color:var(--faint)}
+
+section{margin-top:38px}
+.head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.head h2{font-family:var(--display);font-size:22px;text-transform:uppercase;letter-spacing:.05em}
+.head .note{color:var(--faint);font-size:12.5px;margin-left:auto}
+
+/* chart ------------------------------------------------------------------- */
+.chart{background:var(--surface);border:1px solid var(--line);padding:16px 14px 8px}
+.chart svg{display:block;width:100%;height:auto}
+.legend{display:flex;gap:16px;flex-wrap:wrap;padding:10px 4px 4px;
+  font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
+
+/* repos ------------------------------------------------------------------- */
+.repos{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line)}
+.repo{background:var(--surface);padding:13px 15px;display:flex;flex-direction:column;gap:2px}
+.repo .nm{font-family:var(--mono);font-size:12.5px;color:var(--ink);font-weight:600;
+  overflow-wrap:anywhere}
+.repo .row{display:flex;align-items:baseline;gap:8px;margin-top:4px}
+.repo .big{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--ink)}
+.repo .lbl{font-size:11.5px;color:var(--muted)}
+.chip{display:inline-block;font-family:var(--display);text-transform:uppercase;
+  letter-spacing:.06em;font-size:11px;font-weight:600;padding:2px 7px;
+  border:1px solid currentColor}
+.chip.clear{color:var(--run);background:var(--run-wash)}
+.chip.hold{color:var(--attn);background:var(--attn-wash)}
+
+/* agents ------------------------------------------------------------------ */
+.split{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;align-items:start}
+@media(max-width:860px){.split{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
+.tbl{background:var(--surface);border:1px solid var(--line);max-height:430px;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{position:sticky;top:0;background:var(--sunk);color:var(--muted);
+  font-family:var(--display);text-transform:uppercase;letter-spacing:.07em;
+  font-size:11px;font-weight:600;text-align:left;padding:8px 12px;
+  border-bottom:1px solid var(--line-strong);white-space:nowrap}
+thead th.r,td.r{text-align:right}
+tbody td{padding:7px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--accent-wash)}
+tbody tr[aria-selected="true"]{background:var(--accent-wash);
+  box-shadow:inset 3px 0 0 var(--accent)}
+tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+td.who{font-family:var(--mono);font-size:12.5px;color:var(--ink);font-weight:500}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--body)}
+.bar{height:6px;background:var(--sunk);position:relative;min-width:54px}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--accent)}
+
+/* detail panel ------------------------------------------------------------ */
+.panel{background:var(--surface);border:1px solid var(--line);padding:18px}
+.panel h3{font-family:var(--mono);font-size:17px;font-weight:600}
+.panel .role{font-size:12.5px;color:var(--muted);margin-top:2px}
+.kv{margin-top:14px;display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:13px}
+.kv dt{font-family:var(--display);text-transform:uppercase;letter-spacing:.07em;
+  font-size:11px;color:var(--muted);font-weight:600;padding-top:2px;white-space:nowrap}
+.kv dd{margin:0;font-family:var(--mono);font-size:12.5px;color:var(--ink);
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.tagrow{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}
+.tag{font-family:var(--mono);font-size:11px;padding:1px 6px;background:var(--sunk);
+  color:var(--body);border:1px solid var(--line)}
+.ratio{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.ratio .track{display:flex;height:10px;background:var(--sunk);overflow:hidden}
+.ratio .track i{display:block}
+.ratio .a{background:var(--run)} .ratio .c{background:var(--attn)}
+.ratio .cap{display:flex;justify-content:space-between;font-size:11.5px;
+  color:var(--muted);margin-top:6px}
+
+/* workspaces -------------------------------------------------------------- */
+.ws{background:var(--surface);border:1px solid var(--line);max-height:330px;overflow:auto}
+td.path{font-family:var(--mono);font-size:12px;color:var(--body);overflow-wrap:anywhere}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;
+  vertical-align:1px;background:var(--run)}
+.dot.d{background:var(--attn)}
+
+
+/* usage ------------------------------------------------------------------- */
+.rates{margin-top:14px;display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center}
+.rates label{font-size:12.5px;color:var(--body)}
+.rates input{width:96px;font-family:var(--mono);font-size:12.5px;text-align:right;
+  padding:4px 7px;border:1px solid var(--line-strong);background:var(--ground);
+  color:var(--ink);border-radius:0}
+.rates input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.total{margin-top:16px;padding-top:13px;border-top:2px solid var(--ink);
+  display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.total span{font-family:var(--display);text-transform:uppercase;letter-spacing:.07em;
+  font-size:12px;color:var(--muted);font-weight:600}
+.total b{font-family:var(--mono);font-size:26px;color:var(--ink);font-weight:600;
+  font-variant-numeric:tabular-nums}
+.caveat{margin:12px 0 0;font-size:12px;color:var(--faint);line-height:1.5}
+tfoot td{padding:8px 12px;border-top:2px solid var(--line-strong);
+  font-family:var(--mono);font-weight:600;color:var(--ink);font-size:12.5px}
+tfoot td.r{text-align:right}
+footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);
+  font-size:12px;color:var(--faint)}
+footer code{font-family:var(--mono);color:var(--muted)}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <h1>Hill Floor Board</h1>
+      <p class="sub">What every lane is waiting on, and since when. One snapshot, no live connection.</p>
+    </div>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div class="answer" id="answer">
+    <div class="lamp"><span></span></div>
+    <div>
+      <h2 id="answerH">—</h2>
+      <p id="answerP"></p>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <section id="crewSec" hidden>
+    <div class="head">
+      <h2>Crew and lanes</h2>
+      <span class="note" id="crewNote"></span>
+    </div>
+    <div class="tbl" style="max-height:none">
+      <table>
+        <thead><tr>
+          <th>Agent</th><th>Freshness</th><th class="r">Last tick</th>
+          <th>Holds</th><th class="r">Unread</th>
+        </tr></thead>
+        <tbody id="crew"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Deliveries per day</h2>
+      <span class="note" id="chartNote"></span>
+    </div>
+    <div class="chart">
+      <svg id="chart" viewBox="0 0 960 260" role="img" aria-label="Merged pull requests per day"></svg>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>merged pull requests</span>
+        <span><i style="background:var(--stop-wash);border:1px solid var(--stop)"></i>no deliveries recorded</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Repositories</h2><span class="note">open lanes · merged in last 24h</span></div>
+    <div class="repos" id="repos"></div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Agents</h2>
+      <span class="note">click a row to drill in · sorted by deliveries</span>
+    </div>
+    <div class="split">
+      <div class="tbl">
+        <table>
+          <thead><tr>
+            <th>Agent</th><th class="r">Merged</th><th class="r">24h</th>
+            <th class="r">Verdicts</th><th>Share</th>
+          </tr></thead>
+          <tbody id="agents"></tbody>
+        </table>
+      </div>
+      <div class="panel" id="panel"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Workspaces on this machine</h2>
+      <span class="note" id="wsNote"></span>
+    </div>
+    <div class="ws">
+      <table>
+        <thead><tr>
+          <th>Path</th><th>Branch</th><th class="r">Uncommitted</th>
+          <th class="r">Unpushed</th><th class="r">Size</th>
+        </tr></thead>
+        <tbody id="ws"></tbody>
+      </table>
+    </div>
+  </section>
+
+
+  <section>
+    <div class="head">
+      <h2>Time and usage</h2>
+      <span class="note" id="useNote"></span>
+    </div>
+    <div class="stats" id="useStats"></div>
+    <div class="split" style="margin-top:18px">
+      <div class="tbl" style="max-height:none">
+        <table>
+          <thead><tr>
+            <th>Model</th><th class="r">Turns</th><th class="r">Active</th>
+            <th class="r">Output</th><th class="r">Cache read</th><th class="r">At API rates</th>
+          </tr></thead>
+          <tbody id="models"></tbody>
+          <tfoot id="modelsFoot"></tfoot>
+        </table>
+      </div>
+      <div class="panel">
+        <h3>What it would cost on the API</h3>
+        <div class="role" id="rateNote"></div>
+        <div class="rates" id="rates"></div>
+        <div class="total">
+          <span>Estimated at these rates</span>
+          <b id="grand">—</b>
+        </div>
+        <p class="caveat" id="planNote"></p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Built by <code>collect.py</code> → <code>build.py</code> → this file. The data is inlined, so the page
+    opens from disk with no server. Figures are a point-in-time snapshot, not a live feed —
+    re-run the collector for a newer one.
+  </footer>
+</div>
+
+<script>
+const D = {"collected_at":"2026-09-12T08:05:29+00:00","repos":{"blb-people":{"full":"BelimbingApp/blb-people","open":0,"merged_24h":6,"merged_total_seen":94,"oldest_merge_seen":"2026-08-09T11:00:53Z"},"ai-team":{"full":"BelimbingApp/ai-team","open":0,"merged_24h":5,"merged_total_seen":59,"oldest_merge_seen":"2026-08-30T10:26:16Z"},"belimbing":{"full":"BelimbingApp/belimbing","open":0,"merged_24h":7,"merged_total_seen":90,"oldest_merge_seen":"2026-08-28T11:36:34Z"},"blb-people-connector":{"full":"BelimbingApp/blb-people-connector","open":0,"merged_24h":0,"merged_total_seen":96,"oldest_merge_seen":"2026-09-02T04:53:16Z"},"blb-sbg":{"full":"SB-Tape/blb-sbg","open":0,"merged_24h":3,"merged_total_seen":10,"oldest_merge_seen":"2026-08-29T06:53:57Z"}},"agents":{"fable-5.1-medium":{"merged":38,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-08T08:32:22Z","repos":["blb-people","belimbing","blb-people-connector"]},"desktop-luna":{"merged":9,"merged_24h":1,"accepts":17,"changes":20,"blocked_prs":0,"last_seen":"2026-09-12T02:42:39Z","repos":["blb-people","ai-team","blb-people-connector"]},"desktop-sol":{"merged":27,"merged_24h":1,"accepts":3,"changes":2,"blocked_prs":0,"last_seen":"2026-09-12T02:40:37Z","repos":["blb-people","blb-people-connector"]},"muse-spark":{"merged":15,"merged_24h":3,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-12T02:01:47Z","repos":["blb-people","belimbing","blb-people-connector"]},"opus-max":{"merged":20,"merged_24h":5,"accepts":5,"changes":1,"blocked_prs":0,"last_seen":"2026-09-12T03:30:46Z","repos":["blb-people","ai-team","belimbing","blb-people-connector"]},"astra":{"merged":5,"merged_24h":0,"accepts":1,"changes":2,"blocked_prs":0,"last_seen":"2026-09-09T02:01:46Z","repos":["blb-people","belimbing"]},"terra":{"merged":2,"merged_24h":0,"accepts":4,"changes":0,"blocked_prs":0,"last_seen":"2026-09-12T02:11:14Z","repos":["blb-people","belimbing"]},"composer":{"merged":74,"merged_24h":0,"accepts":52,"changes":21,"blocked_prs":0,"last_seen":"2026-09-12T04:51:00Z","repos":["blb-people","ai-team","belimbing","blb-people-connector"]},"opus-5-extra":{"merged":30,"merged_24h":0,"accepts":14,"changes":17,"blocked_prs":0,"last_seen":"2026-09-09T01:01:39Z","repos":["blb-people","ai-team","belimbing","blb-people-connector"]},"opus-5-low":{"merged":2,"merged_24h":0,"accepts":8,"changes":6,"blocked_prs":0,"last_seen":"2026-09-08T17:44:16Z","repos":["blb-people","belimbing"]},"desktop-astra":{"merged":11,"merged_24h":1,"accepts":5,"changes":5,"blocked_prs":0,"last_seen":"2026-09-11T16:07:35Z","repos":["blb-people","belimbing","blb-people-connector"]},"fable-medium":{"merged":20,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-07T23:06:50Z","repos":["blb-people","blb-people-connector"]},"fable-5.1":{"merged":7,"merged_24h":0,"accepts":1,"changes":3,"blocked_prs":0,"last_seen":"2026-09-07T21:11:41Z","repos":["blb-people","belimbing","blb-people-connector"]},"(unlabelled)":{"merged":26,"merged_24h":4,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-12T04:55:41Z","repos":["blb-people","belimbing","blb-people-connector","blb-sbg"]},"kiat-6e":{"merged":3,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-04T10:59:25Z","repos":["blb-people","blb-people-connector"]},"opus-5-contract-b":{"merged":1,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-02T00:00:38Z","repos":["blb-people"]},"opus-4.8-extra":{"merged":2,"merged_24h":2,"accepts":3,"changes":1,"blocked_prs":0,"last_seen":"2026-09-12T02:09:45Z","repos":["ai-team"]},"codex-gpt-5-b":{"merged":2,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-08T08:45:22Z","repos":["ai-team"]},"root":{"merged":1,"merged_24h":0,"accepts":3,"changes":1,"blocked_prs":0,"last_seen":"2026-09-08T08:44:20Z","repos":["ai-team"]},"workflow-audit":{"merged":1,"merged_24h":0,"accepts":3,"changes":2,"blocked_prs":0,"last_seen":"2026-09-08T06:19:52Z","repos":["ai-team"]},"desktop-sol-ruleset":{"merged":1,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-04T19:24:11Z","repos":["ai-team"]},"desktop-sol-onboarding":{"merged":1,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-04T17:52:40Z","repos":["ai-team"]},"desktop-sol-workflow":{"merged":1,"merged_24h":0,"accepts":2,"changes":4,"blocked_prs":0,"last_seen":"2026-09-04T19:19:06Z","repos":["ai-team"]},"sonnet-5":{"merged":2,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-08-31T02:55:19Z","repos":["ai-team"]},"muse":{"merged":3,"merged_24h":0,"accepts":1,"changes":0,"blocked_prs":0,"last_seen":"2026-09-04T07:20:59Z","repos":["ai-team"]},"gpt-5":{"merged":5,"merged_24h":1,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-12T03:16:54Z","repos":["ai-team","belimbing"]},"codex-gpt-5":{"merged":5,"merged_24h":0,"accepts":1,"changes":0,"blocked_prs":0,"last_seen":"2026-09-04T23:58:21Z","repos":["ai-team"]},"codex-fasttrack-security":{"merged":1,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-08-31T04:28:33Z","repos":["ai-team"]},"codex-fasttrack":{"merged":3,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-08-31T15:34:17Z","repos":["ai-team"]},"claude-opus-5":{"merged":9,"merged_24h":0,"accepts":6,"changes":2,"blocked_prs":0,"last_seen":"2026-09-04T09:34:50Z","repos":["ai-team"]},"antigravity":{"merged":1,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-03T12:24:14Z","repos":["ai-team"]},"fable":{"merged":6,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-01T14:13:32Z","repos":["ai-team"]},"opus-5":{"merged":6,"merged_24h":3,"accepts":4,"changes":0,"blocked_prs":0,"last_seen":"2026-09-11T15:58:15Z","repos":["belimbing","blb-sbg"]},"kiat-20":{"merged":1,"merged_24h":0,"accepts":1,"changes":0,"blocked_prs":0,"last_seen":"2026-09-04T12:48:41Z","repos":["blb-people-connector"]},"faith-tohmm":{"merged":1,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-02T04:53:16Z","repos":["blb-people-connector"]},"opus-5-fix-b":{"merged":1,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-02T09:44:58Z","repos":["blb-people-connector"]},"blue":{"merged":2,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-09-04T20:50:44Z","repos":["blb-people-connector"]},"codex-5":{"merged":1,"merged_24h":0,"accepts":5,"changes":14,"blocked_prs":0,"last_seen":"2026-08-29T14:43:38Z","repos":["blb-sbg"]},"kiat-luna":{"merged":3,"merged_24h":0,"accepts":0,"changes":0,"blocked_prs":0,"last_seen":"2026-08-29T08:27:34Z","repos":["blb-sbg"]},"luna":{"merged":0,"merged_24h":0,"accepts":4,"changes":0,"blocked_prs":0,"last_seen":"2026-09-11T21:32:04Z","repos":[]},"workflow-review":{"merged":0,"merged_24h":0,"accepts":0,"changes":1,"blocked_prs":0,"last_seen":"2026-09-08T04:25:51Z","repos":[]},"desktop-terra":{"merged":0,"merged_24h":0,"accepts":1,"changes":0,"blocked_prs":0,"last_seen":"2026-09-04T23:54:21Z","repos":[]},"desktop-sol-landfix":{"merged":0,"merged_24h":0,"accepts":3,"changes":3,"blocked_prs":0,"last_seen":"2026-09-04T19:17:32Z","repos":[]},"desktop-astra-review":{"merged":0,"merged_24h":0,"accepts":1,"changes":0,"blocked_prs":0,"last_seen":"2026-09-11T14:47:04Z","repos":[]},"codex-reviewer-b":{"merged":0,"merged_24h":0,"accepts":2,"changes":2,"blocked_prs":0,"last_seen":"2026-08-29T14:09:55Z","repos":[]},"codex-reviewer":{"merged":0,"merged_24h":0,"accepts":6,"changes":5,"blocked_prs":0,"last_seen":"2026-08-29T08:25:52Z","repos":[]},"mcclintock":{"merged":0,"merged_24h":0,"accepts":1,"changes":0,"blocked_prs":0,"last_seen":"2026-08-29T06:53:07Z","repos":[]}},"open_lanes":[],"daily":{"2026-09-07":131,"2026-09-12":10,"2026-09-11":14,"2026-09-08":89,"2026-09-06":23,"2026-08-11":1,"2026-08-09":1,"2026-09-02":8,"2026-09-03":9,"2026-09-05":15,"2026-09-04":11,"2026-09-01":8,"2026-08-30":14,"2026-08-31":7,"2026-08-28":1,"2026-08-29":7},"workspaces":[{"path":"~/repo/opus-max/ai-team","branch":"main","head":"bb9157f2","dirty_files":0,"unpushed":0,"size_mb":29},{"path":"~/repo/opus-max/belimbing","branch":"main","head":"d17d0439","dirty_files":0,"unpushed":0,"size_mb":80},{"path":"~/repo/opus-max/belimbing-a","branch":"main","head":"84b93afb","dirty_files":7,"unpushed":0,"size_mb":79},{"path":"~/repo/opus-max/belimbing-b","branch":"main","head":"8bdec447","dirty_files":0,"unpushed":0,"size_mb":215},{"path":"~/repo/opus-max/belimbing-c","branch":"main","head":"0d284616","dirty_files":7,"unpushed":0,"size_mb":78},{"path":"~/repo/opus-max/belimbing-d","branch":"main","head":"efed2a30","dirty_files":7,"unpushed":0,"size_mb":80},{"path":"~/repo/opus-max/belimbing-f","branch":"main","head":"296e209f","dirty_files":7,"unpushed":0,"size_mb":78},{"path":"~/repo/opus-max/blb-people","branch":"main","head":"b96090d","dirty_files":0,"unpushed":0,"size_mb":19},{"path":"~/repo/opus-max/blb-people-connector","branch":"main","head":"19f6e74","dirty_files":0,"unpushed":0,"size_mb":7},{"path":"~/repo/opus-max/blb-sbg","branch":"tmp-16","head":"e743252","dirty_files":0,"unpushed":0,"size_mb":31},{"path":"~/repo/opus-max/review-belimbing","branch":"main","head":"175d4eb6","dirty_files":7,"unpushed":0,"size_mb":91},{"path":"~/repo/opus-max/review-blb-people","branch":"pr420","head":"449ef32","dirty_files":0,"unpushed":0,"size_mb":16},{"path":"~/repo/opus-max/review-blb-people-connector","branch":"pr332","head":"0403048","dirty_files":0,"unpushed":0,"size_mb":7},{"path":"~/repo/opus-max/review2-belimbing","branch":"main","head":"175d4eb6","dirty_files":7,"unpushed":0,"size_mb":78},{"path":"~/repo/opus-max/review2-blb-people-connector","branch":"HEAD","head":"39d085a","dirty_files":0,"unpushed":0,"size_mb":7},{"path":"~/repo/opus-max/review3-belimbing","branch":"main","head":"7d695117","dirty_files":7,"unpushed":0,"size_mb":79},{"path":"~/repo/opus-max/review4-blb-people-connector","branch":"HEAD","head":"b801856","dirty_files":0,"unpushed":0,"size_mb":7},{"path":"~/repo/sbg/belimbing","branch":"main","head":"e397ec15","dirty_files":0,"unpushed":0,"size_mb":4553},{"path":"~/repo/sbg/blb-team","branch":"agent/fable-issue-296","head":"6ddbcf0e","dirty_files":0,"unpushed":0,"size_mb":63},{"path":"~/repo/sbg/upstream-ai-team","branch":"agent/composer-issue-664","head":"1daf65a3","dirty_files":0,"unpushed":0,"size_mb":77},{"path":"~/repo/laravel/ai-team","branch":"agent/composer-issue-110-app-token","head":"aa5c33b","dirty_files":0,"unpushed":0,"size_mb":6},{"path":"~/repo/laravel/ai-team-wsl","branch":"main","head":"360d78bf","dirty_files":0,"unpushed":0,"size_mb":30},{"path":"~/repo/laravel/blb","branch":"main","head":"280bd95a","dirty_files":0,"unpushed":0,"size_mb":1833},{"path":"~/repo/laravel/blb-people","branch":"main","head":"b96090d","dirty_files":0,"unpushed":0,"size_mb":17},{"path":"~/repo/laravel/blb-people-connector","branch":"main","head":"b34b87e","dirty_files":0,"unpushed":0,"size_mb":9},{"path":"~/repo/laravel/blb-people-sol","branch":"main","head":"0d3dfd0","dirty_files":497,"unpushed":0,"size_mb":8},{"path":"~/repo/laravel/blb-review-n","branch":"main","head":"fcdb32c7","dirty_files":1,"unpushed":0,"size_mb":335},{"path":"~/repo/laravel/conn-rebase","branch":"HEAD","head":"93bcb1c","dirty_files":0,"unpushed":0,"size_mb":3},{"path":"~/repo/laravel/conn-review-v","branch":"main","head":"14e85d1","dirty_files":0,"unpushed":0,"size_mb":3},{"path":"~/repo/laravel/conn-review-vb","branch":"main","head":"63b6ce42","dirty_files":1,"unpushed":0,"size_mb":369},{"path":"~/repo/laravel/mariabelimbing","branch":"HEAD","head":"","dirty_files":27,"unpushed":0,"size_mb":326}],"quota":{"github_core":{"account":"kiatng","remaining":4564,"limit":5000,"resets_at":"2026-09-12T08:34:25+00:00","scope":"shared by every agent using this account"},"model_tokens":{"state":"unknown","why":"no harness on this machine reports model quota"}},"coverage":[{"signal":"waiting_on","checks":"draft flag, latest check-run per name, mergeable_state","not_checked":"whether a human intends to act; whether a reviewer is reachable or rate-limited"},{"signal":"landable","checks":"mergeable_state == clean AND no red checks","not_checked":"the AI Team review gate \u2014 a PR can be clean here and refused by review_gate.sh"},{"signal":"merged counts","checks":"merged_at on the most recent 100 closed PRs per repo","not_checked":"anything older than that window; unlabelled PRs are grouped, not attributed"},{"signal":"verdicts","checks":"**From:**/**Verdict:** markers on reviews of the 25 most recent merges per repo","not_checked":"verdicts written in other formats \u2014 two were missed this way on 2026-09-11"},{"signal":"agent last_seen","checks":"newest merge or verdict timestamp","not_checked":"liveness \u2014 an agent can be alive and idle, or dead and recently merged"},{"signal":"workspaces","checks":"git status, unpushed commits, disk size on this machine","not_checked":"other machines; whether a worktree's composed dependencies are stale"},{"signal":"model quota","checks":"nothing","not_checked":"everything \u2014 reported as unknown rather than zero"}],"coverage_from":"2026-09-02","halts":[],"lead_time":{"n":349,"median_h":1.5,"p90_h":15.4,"by_agent":{"fable-5.1-medium":{"n":38,"median_h":2.5},"desktop-luna":{"n":9,"median_h":0.8},"desktop-sol":{"n":27,"median_h":0.7},"muse-spark":{"n":15,"median_h":2.7},"opus-max":{"n":20,"median_h":5.1},"astra":{"n":5,"median_h":8.2},"terra":{"n":2,"median_h":6.2},"composer":{"n":74,"median_h":3.3},"opus-5-extra":{"n":30,"median_h":0.9},"opus-5-low":{"n":2,"median_h":0.7},"desktop-astra":{"n":11,"median_h":0.3},"fable-medium":{"n":20,"median_h":0.8},"fable-5.1":{"n":7,"median_h":1.7},"(unlabelled)":{"n":26,"median_h":0.4},"kiat-6e":{"n":3,"median_h":3.7},"opus-5-contract-b":{"n":1,"median_h":2.4},"opus-4.8-extra":{"n":2,"median_h":0.3},"codex-gpt-5-b":{"n":2,"median_h":1.5},"root":{"n":1,"median_h":1.2},"workflow-audit":{"n":1,"median_h":0.6},"desktop-sol-ruleset":{"n":1,"median_h":1.0},"desktop-sol-onboarding":{"n":1,"median_h":0.8},"desktop-sol-workflow":{"n":1,"median_h":0.6},"sonnet-5":{"n":2,"median_h":5.5},"muse":{"n":3,"median_h":0.8},"gpt-5":{"n":5,"median_h":2.4},"codex-gpt-5":{"n":5,"median_h":1.0},"codex-fasttrack-security":{"n":1,"median_h":0.9},"codex-fasttrack":{"n":3,"median_h":0.8},"claude-opus-5":{"n":9,"median_h":3.2},"antigravity":{"n":1,"median_h":2.5},"fable":{"n":6,"median_h":0.9},"opus-5":{"n":6,"median_h":2.2},"kiat-20":{"n":1,"median_h":15.8},"faith-tohmm":{"n":1,"median_h":49.4},"opus-5-fix-b":{"n":1,"median_h":15.2},"blue":{"n":2,"median_h":5.3},"codex-5":{"n":1,"median_h":1.7},"kiat-luna":{"n":3,"median_h":0.8}}},"sessions":[{"id":"b0ed2029","project":"-home-kiat","agent":"opus-5-max","model":"claude-opus-5","turns":3935,"tokens":{"input":7858,"output":3572340,"cache_read":1827453109,"cache_write":21819333,"thinking":1487371},"first":"2026-09-07T05:19:10.696Z","last":"2026-09-12T08:07:08.565Z","span_h":122.8,"active_h":18.47},{"id":"cb1a8af9","project":"-home-kiat","agent":"opus-4.8-extra","model":"claude-opus-4-8","turns":751,"tokens":{"input":1502,"output":1293526,"cache_read":279214390,"cache_write":5697835,"thinking":910345},"first":"2026-09-11T16:24:26.591Z","last":"2026-09-12T02:14:38.565Z","span_h":9.84,"active_h":2.72},{"id":"8f4e03a4","project":"-home-kiat","agent":null,"model":"claude-opus-4-8","turns":84,"tokens":{"input":168,"output":120548,"cache_read":5887384,"cache_write":394935,"thinking":84073},"first":"2026-09-09T02:47:16.668Z","last":"2026-09-12T00:30:05.439Z","span_h":69.71,"active_h":0.65},{"id":"7a230140","project":"-home-kiat","agent":null,"model":"claude-opus-5","turns":56,"tokens":{"input":112,"output":42192,"cache_read":2816506,"cache_write":356988,"thinking":11240},"first":"2026-09-09T04:57:12.205Z","last":"2026-09-11T16:26:11.115Z","span_h":59.48,"active_h":0.59},{"id":"b85e4969","project":"-home-kiat-repo-laravel-blb--claude-worktrees-github-issue-933-dfae39","agent":null,"model":"claude-opus-5","turns":624,"tokens":{"input":1248,"output":519259,"cache_read":177400710,"cache_write":860720,"thinking":183244},"first":"2026-09-11T13:59:55.701Z","last":"2026-09-11T16:04:14.165Z","span_h":2.07,"active_h":1.61},{"id":"c3196d78","project":"-home-kiat-repo-laravel-blb--claude-worktrees-pr-937-yagni-review-4a1e88","agent":null,"model":"claude-opus-5","turns":161,"tokens":{"input":322,"output":146520,"cache_read":20537413,"cache_write":368797,"thinking":44148},"first":"2026-09-11T13:56:50.489Z","last":"2026-09-11T14:07:29.414Z","span_h":0.18,"active_h":0.18},{"id":"9cee6dba","project":"-home-kiat","agent":null,"model":"claude-opus-5","turns":12,"tokens":{"input":24,"output":3107,"cache_read":429381,"cache_write":32070,"thinking":182},"first":"2026-09-10T07:30:20.716Z","last":"2026-09-10T07:31:01.067Z","span_h":0.01,"active_h":0.01},{"id":"1ae94350","project":"-home-kiat-repo-bilimbi--claude-worktrees-bilimbi-modularity-scaling-3834eb","agent":null,"model":"claude-opus-5","turns":56,"tokens":{"input":112,"output":118569,"cache_read":4179041,"cache_write":496660,"thinking":39976},"first":"2026-09-10T05:31:42.142Z","last":"2026-09-10T07:23:09.876Z","span_h":1.86,"active_h":0.55},{"id":"904e0efb","project":"-home-kiat","agent":"opus-5-low","model":"claude-opus-5","turns":1192,"tokens":{"input":2382,"output":623284,"cache_read":476196859,"cache_write":4489621,"thinking":202012},"first":"2026-09-08T07:09:31.545Z","last":"2026-09-09T04:11:52.590Z","span_h":21.04,"active_h":10.42},{"id":"f8ec91a6","project":"-home-kiat-repo-laravel-blb--claude-worktrees-nervous-chatelet-70d342","agent":"opus-5-extra 2nd run","model":"claude-opus-5","turns":11139,"tokens":{"input":22146,"output":9407221,"cache_read":5658108340,"cache_write":26786989,"thinking":3342459},"first":"2026-09-05T06:55:07.448Z","last":"2026-09-09T03:33:08.972Z","span_h":92.63,"active_h":57.32},{"id":"04c0e806","project":"-home-kiat","agent":null,"model":"claude-opus-5","turns":4,"tokens":{"input":8,"output":381,"cache_read":125653,"cache_write":18956,"thinking":0},"first":"2026-09-09T03:16:59.344Z","last":"2026-09-09T03:17:07.270Z","span_h":0.0,"active_h":0.0},{"id":"0b380637","project":"-home-kiat","agent":null,"model":"claude-opus-5","turns":5,"tokens":{"input":10,"output":1926,"cache_read":150996,"cache_write":30687,"thinking":1005},"first":"2026-09-09T03:13:59.559Z","last":"2026-09-09T03:14:14.396Z","span_h":0.0,"active_h":0.0},{"id":"f3529b96","project":"-home-kiat","agent":null,"model":"claude-opus-5","turns":3,"tokens":{"input":6,"output":468,"cache_read":99226,"cache_write":10818,"thinking":0},"first":"2026-09-09T03:10:57.787Z","last":"2026-09-09T03:11:06.253Z","span_h":0.0,"active_h":0.0},{"id":"93216819","project":"-home-kiat","agent":null,"model":"claude-opus-5","turns":3,"tokens":{"input":6,"output":376,"cache_read":98082,"cache_write":10727,"thinking":0},"first":"2026-09-09T03:03:20.261Z","last":"2026-09-09T03:03:26.665Z","span_h":0.0,"active_h":0.0},{"id":"1a02be09","project":"-home-kiat","agent":null,"model":"claude-opus-5","turns":3,"tokens":{"input":6,"output":511,"cache_read":99264,"cache_write":10857,"thinking":0},"first":"2026-09-09T03:02:45.938Z","last":"2026-09-09T03:02:55.538Z","span_h":0.0,"active_h":0.0},{"id":"4723c224","project":"-home-kiat","agent":null,"model":"claude-opus-5","turns":4,"tokens":{"input":8,"output":704,"cache_read":107211,"cache_write":37716,"thinking":0},"first":"2026-09-09T02:55:05.514Z","last":"2026-09-09T02:55:22.782Z","span_h":0.0,"active_h":0.0},{"id":"1b2ce734","project":"-home-kiat","agent":"fable-5.1-medium","model":"claude-opus-5","turns":1036,"tokens":{"input":25128,"output":1204733,"cache_read":508026027,"cache_write":5197341,"thinking":195937},"first":"2026-09-07T05:09:56.324Z","last":"2026-09-08T08:37:34.431Z","span_h":27.46,"active_h":6.21},{"id":"d2ba1543","project":"-home-kiat","agent":"fable-medium","model":"claude-fable-5-1","turns":3334,"tokens":{"input":97418,"output":6309195,"cache_read":1592554446,"cache_write":24277509,"thinking":1595663},"first":"2026-09-05T11:05:33.878Z","last":"2026-09-07T22:45:05.172Z","span_h":59.66,"active_h":17.93},{"id":"0c898c25","project":"-home-kiat","agent":null,"model":"claude-fable-5-1","turns":6912,"tokens":{"input":466060,"output":8996764,"cache_read":3473419982,"cache_write":43848990,"thinking":2106318},"first":"2026-09-01T16:55:42.640Z","last":"2026-09-07T21:47:01.218Z","span_h":148.86,"active_h":52.59},{"id":"a2810573","project":"-home-kiat-repo-laravel-blb","agent":null,"model":"claude-opus-5","turns":263,"tokens":{"input":524,"output":207997,"cache_read":24771699,"cache_write":532742,"thinking":113333},"first":"2026-09-06T02:37:12.885Z","last":"2026-09-06T03:45:49.796Z","span_h":1.14,"active_h":1.01},{"id":"165bda64","project":"-home-kiat-repo-laravel-blb--claude-worktrees-agent-heartbeat-setup-58c359","agent":"opus-5-extra 2nd run","model":"claude-opus-5","turns":3504,"tokens":{"input":6964,"output":3190570,"cache_read":1657801516,"cache_write":8991922,"thinking":1056732},"first":"2026-09-05T06:55:07.448Z","last":"2026-09-06T03:43:58.894Z","span_h":20.81,"active_h":16.85},{"id":"9a1de1c2","project":"-home-kiat","agent":null,"model":"claude-fable-5-1","turns":2,"tokens":{"input":4,"output":14,"cache_read":47940,"cache_write":29404,"thinking":0},"first":"2026-09-05T06:53:59.714Z","last":"2026-09-05T06:54:03.288Z","span_h":0.0,"active_h":0.0},{"id":"d643f3e4","project":"-home-kiat-repo-laravel-blb--claude-worktrees-steward-docs-ai-team-1f22fd","agent":"opus-5-extra people","model":"claude-opus-5","turns":4539,"tokens":{"input":9050,"output":5458969,"cache_read":2218810430,"cache_write":26392409,"thinking":1644244},"first":"2026-09-01T16:27:12.337Z","last":"2026-09-05T06:53:15.806Z","span_h":86.43,"active_h":26.86},{"id":"85b223d1","project":"-home-kiat","agent":"opus-5 ai-team","model":"claude-opus-5","turns":1190,"tokens":{"input":2368,"output":924296,"cache_read":522853057,"cache_write":2575853,"thinking":330073},"first":"2026-09-01T09:33:42.744Z","last":"2026-09-04T10:32:20.615Z","span_h":72.98,"active_h":9.69},{"id":"49561697","project":"-home-kiat","agent":null,"model":"claude-sonnet-5","turns":909,"tokens":{"input":1816,"output":502353,"cache_read":298194242,"cache_write":6693675,"thinking":222673},"first":"2026-09-01T16:47:58.871Z","last":"2026-09-04T09:44:06.670Z","span_h":64.94,"active_h":3.5},{"id":"e8b09b22","project":"-home-kiat","agent":"R2 Fable","model":"claude-fable-5","turns":3068,"tokens":{"input":6112,"output":2095743,"cache_read":1441179684,"cache_write":21006827,"thinking":684294},"first":"2026-08-26T08:32:39.858Z","last":"2026-09-01T16:53:55.520Z","span_h":152.35,"active_h":21.67},{"id":"41713252","project":"-home-kiat","agent":"R2 Sonnet5","model":"claude-sonnet-5","turns":6468,"tokens":{"input":12936,"output":3447291,"cache_read":3169655786,"cache_write":34482029,"thinking":1426519},"first":"2026-08-26T08:02:01.735Z","last":"2026-09-01T09:17:46.470Z","span_h":145.26,"active_h":19.02},{"id":"fb538af0","project":"-home-kiat-repo-bilimbi--claude-worktrees-consolidate-docs-ai-team-b7c31d","agent":null,"model":"claude-opus-5","turns":1353,"tokens":{"input":2706,"output":1177981,"cache_read":691116954,"cache_write":9226487,"thinking":499507},"first":"2026-08-29T22:30:08.256Z","last":"2026-08-31T15:39:49.197Z","span_h":41.16,"active_h":8.68},{"id":"68d11887","project":"-home-kiat-repo-sbg-belimbing--claude-worktrees-start-script-permission-778c71","agent":null,"model":"claude-opus-5","turns":279,"tokens":{"input":558,"output":240154,"cache_read":35016497,"cache_write":409859,"thinking":138002},"first":"2026-08-31T11:56:18.283Z","last":"2026-08-31T13:12:15.158Z","span_h":1.27,"active_h":0.99},{"id":"4f77784e","project":"-home-kiat","agent":null,"model":"claude-opus-5","turns":486,"tokens":{"input":4734,"output":418723,"cache_read":89039043,"cache_write":770799,"thinking":0},"first":"2026-08-15T01:29:40.600Z","last":"2026-08-31T12:40:19.403Z","span_h":395.18,"active_h":1.43},{"id":"f9fb0412","project":"-home-kiat-repo-laravel-blb","agent":null,"model":"claude-opus-5","turns":934,"tokens":{"input":1800,"output":1705023,"cache_read":407974420,"cache_write":18973672,"thinking":0},"first":"2026-08-08T07:10:09.577Z","last":"2026-08-31T12:37:35.839Z","span_h":557.46,"active_h":5.63},{"id":"b1d088a0","project":"-home-kiat-repo-sbg-belimbing--claude-worktrees-onboard-docs-ai-team-73f795","agent":null,"model":"claude-opus-5","turns":1417,"tokens":{"input":2834,"output":1727930,"cache_read":778072957,"cache_write":5660170,"thinking":756513},"first":"2026-08-29T02:59:32.099Z","last":"2026-08-29T22:00:26.716Z","span_h":19.02,"active_h":6.87},{"id":"9e02dbda","project":"-home-kiat-repo-sbg-belimbing--claude-worktrees-sbg-stale-data-labels-7e06e4","agent":"R2 Opus5","model":"claude-opus-5","turns":4198,"tokens":{"input":8396,"output":4034303,"cache_read":2120295599,"cache_write":14479658,"thinking":1442680},"first":"2026-08-26T02:38:06.357Z","last":"2026-08-29T08:41:07.308Z","span_h":78.05,"active_h":24.9},{"id":"63bafcc5","project":"-home-kiat-repo-bilimbi--claude-worktrees-ai-team-task-execution-50cf0e","agent":"R4/R5 opus-4.8","model":"claude-opus-4-8","turns":3317,"tokens":{"input":6588,"output":4956707,"cache_read":1595282094,"cache_write":12411635,"thinking":3345654},"first":"2026-08-21T11:10:54.000Z","last":"2026-08-25T12:35:13.853Z","span_h":97.41,"active_h":14.72},{"id":"696ff87a","project":"-home-kiat","agent":"R4 Fable","model":"claude-fable-5","turns":2495,"tokens":{"input":4972,"output":2079454,"cache_read":1127350302,"cache_write":15016207,"thinking":959623},"first":"2026-08-20T23:56:33.112Z","last":"2026-08-24T10:28:55.900Z","span_h":82.54,"active_h":15.2},{"id":"0c22441d","project":"-home-kiat","agent":null,"model":"claude-fable-5","turns":4,"tokens":{"input":8,"output":501,"cache_read":98890,"cache_write":27641,"thinking":74},"first":"2026-08-21T14:15:17.999Z","last":"2026-08-21T15:52:35.130Z","span_h":1.62,"active_h":0.1},{"id":"b797e1bf","project":"-home-kiat","agent":null,"model":"claude-sonnet-5","turns":4,"tokens":{"input":8,"output":1056,"cache_read":135976,"cache_write":34958,"thinking":294},"first":"2026-08-21T15:26:59.465Z","last":"2026-08-21T15:27:41.680Z","span_h":0.01,"active_h":0.01},{"id":"5e740919","project":"-home-kiat","agent":null,"model":"claude-sonnet-5","turns":19,"tokens":{"input":38,"output":6429,"cache_read":744523,"cache_write":43420,"thinking":3192},"first":"2026-08-19T05:07:03.312Z","last":"2026-08-19T05:08:24.878Z","span_h":0.02,"active_h":0.02},{"id":"0d92ccc8","project":"-home-kiat","agent":null,"model":"claude-opus-5","turns":332,"tokens":{"input":658,"output":243739,"cache_read":50319418,"cache_write":1534513,"thinking":0},"first":"2026-08-12T10:30:42.994Z","last":"2026-08-12T13:00:09.224Z","span_h":2.49,"active_h":1.1},{"id":"b6c16e64","project":"-home-kiat","agent":null,"model":"claude-sonnet-5","turns":307,"tokens":{"input":614,"output":336843,"cache_read":55895164,"cache_write":576526,"thinking":0},"first":"2026-08-07T02:47:25.236Z","last":"2026-08-07T04:12:03.023Z","span_h":1.41,"active_h":0.84},{"id":"c593cc72","project":"-home-kiat","agent":null,"model":"claude-opus-5","turns":6,"tokens":{"input":12,"output":1860,"cache_read":101358,"cache_write":26982,"thinking":0},"first":"2026-08-05T01:45:36.156Z","last":"2026-08-05T01:45:49.476Z","span_h":0.0,"active_h":0.0},{"id":"887bd772","project":"-home-kiat-repo-laravel-blb","agent":null,"model":"claude-opus-5","turns":494,"tokens":{"input":927,"output":339514,"cache_read":151476817,"cache_write":4104655,"thinking":0},"first":"2026-08-02T02:31:52.287Z","last":"2026-08-02T09:52:03.524Z","span_h":7.34,"active_h":1.79}],"usage":{"total":{"turns":64902,"span_h":2444.5,"active_h":350.1,"tokens":{"input":699151,"output":65459074,"cache_read":30463138386,"cache_write":318749592,"thinking":22827380}},"by_model":{"claude-opus-5":{"turns":37228,"active_h":201.2,"tokens":{"input":100907,"output":35312650,"cache_read":17423477583,"cache_write":154208001,"thinking":11488658}},"claude-opus-4-8":{"turns":4152,"active_h":18.1,"tokens":{"input":8258,"output":6370781,"cache_read":1880383868,"cache_write":18504405,"thinking":4340072}},"claude-fable-5-1":{"turns":10248,"active_h":70.5,"tokens":{"input":563482,"output":15305973,"cache_read":5066022368,"cache_write":68155903,"thinking":3701981}},"claude-sonnet-5":{"turns":7707,"active_h":23.4,"tokens":{"input":15412,"output":4293972,"cache_read":3524625691,"cache_write":41830608,"thinking":1652678}},"claude-fable-5":{"turns":5567,"active_h":37.0,"tokens":{"input":11092,"output":4175698,"cache_read":2568628876,"cache_write":36050675,"thinking":1643991}}},"window_days":14,"source":"Claude Code session transcripts on this machine","not_covered":"sessions on other machines, and any harness that is not Claude Code"},"hill":{"claims":[{"key":"blb-people#476","agent":"opus-max","session":null,"host":"LivenPC","claimed_at":"2026-09-12T08:02:45+00:00","note":"steward"}],"live":[{"agent":"opus-max","at":"2026-09-12T08:02:45+00:00","session":null,"host":"LivenPC","pid":2224486,"lane":"blb-people#476","age_s":267,"freshness":"fresh"}],"unread_by_agent":{"opus-max":1},"events":[{"id":2,"at":"2026-09-12T08:02:45+00:00","agent":"opus-max","kind":"message.sent","detail":"{\"to\":\"opus-max\",\"ref\":null}"},{"id":1,"at":"2026-09-12T08:02:45+00:00","agent":"opus-max","kind":"claim","detail":"{\"key\":\"blb-people#476\",\"note\":\"steward\"}"}],"source":"the-hill state on this machine"}};
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ago = iso => {
+  if (!iso) return "never";
+  const h = (Date.now() - Date.parse(iso)) / 36e5;
+  if (h < 1) return Math.max(1, Math.round(h * 60)) + "m ago";
+  if (h < 48) return Math.round(h) + "h ago";
+  return Math.round(h / 24) + "d ago";
+};
+
+/* masthead + answer -------------------------------------------------------- */
+const q = D.quota.github_core || {};
+$("#meta").innerHTML =
+  `collected <b>${esc(D.collected_at.replace("T", " ").replace("+00:00", "Z"))}</b><br>` +
+  `github api <b>${q.remaining ?? "?"}/${q.limit ?? "?"}</b> · account <b>${esc(q.account || "?")}</b><br>` +
+  `model quota <b>unknown</b> — not reported here`;
+
+const openLanes = D.open_lanes.length;
+const halts = D.halts.length;
+const waiting = D.open_lanes.filter(l => l.waiting_on !== "nothing — landable").length;
+const ans = $("#answer");
+if (halts) {
+  ans.classList.add("warn");
+  $("#answerH").textContent = `Halted — ${halts} stop order open`;
+  $("#answerP").textContent = "No lane may advance while an owner halt is in force.";
+} else if (openLanes === 0) {
+  $("#answerH").textContent = "All lanes clear";
+  $("#answerP").textContent =
+    `Nothing is waiting on anyone across ${Object.keys(D.repos).length} repositories. ` +
+    `The floor is idle because the work is done, not because it is stuck.`;
+} else {
+  ans.classList.add("warn");
+  $("#answerH").textContent = `${waiting} lane${waiting === 1 ? "" : "s"} waiting`;
+  $("#answerP").textContent = D.open_lanes.map(l => `#${l.number} → ${l.waiting_on}`).join(" · ");
+}
+
+/* stats -------------------------------------------------------------------- */
+const merged24 = Object.values(D.repos).reduce((a, r) => a + r.merged_24h, 0);
+const dirty = D.workspaces.filter(w => w.dirty_files > 0).length;
+const gb = (D.workspaces.reduce((a, w) => a + (w.size_mb || 0), 0) / 1024).toFixed(1);
+const activeAgents = Object.values(D.agents).filter(a => a.merged_24h > 0 || a.accepts + a.changes > 0).length;
+$("#stats").innerHTML = [
+  ["Open lanes", openLanes, openLanes ? "awaiting someone" : "nothing in flight"],
+  ["Delivered · 24h", merged24, "pull requests merged"],
+  ["Agents seen", Object.keys(D.agents).length, `${activeAgents} with recent activity`],
+  ["Workspaces", D.workspaces.length, `${gb} GB · ${dirty} with uncommitted work`],
+].map(([k, v, n]) =>
+  `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div><div class="n">${esc(n)}</div></div>`
+).join("");
+
+/* chart -------------------------------------------------------------------- */
+(() => {
+  const seen = Object.keys(D.daily).sort();
+  if (!seen.length) return;
+  // A day with no deliveries is absent from the data, not zero. Plotting only
+  // the days that exist would quietly close the gap where the board was
+  // stopped — which is the most important thing this chart has to show. Fill
+  // the calendar so a stop is drawn as a stop.
+  // ...but only back to where every repository still has complete data. Before
+  // that horizon the read was truncated, and drawing those days as zero would
+  // assert "no deliveries" where the honest answer is "not known".
+  const SPAN = 21, last = new Date(seen[seen.length - 1] + "T00:00:00Z"), days = [];
+  const floor = D.coverage_from || seen[0];
+  for (let i = SPAN - 1; i >= 0; i--) {
+    const d = new Date(last); d.setUTCDate(d.getUTCDate() - i);
+    const iso = d.toISOString().slice(0, 10);
+    if (iso >= floor) days.push(iso);
+  }
+  days.forEach(d => { if (!(d in D.daily)) D.daily[d] = 0; });
+  const vals = days.map(d => D.daily[d]);
+  const max = Math.max(...vals);
+  const W = 960, H = 260, L = 44, R = 14, T = 18, B = 46;
+  const iw = W - L - R, ih = H - T - B;
+  const step = iw / days.length, bw = Math.min(34, step * .62);
+  const y = v => T + ih - (v / max) * ih;
+  const ticks = [0, Math.round(max / 2), max];
+  let s = "";
+  ticks.forEach(t => {
+    s += `<line x1="${L}" x2="${W - R}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}"
+      stroke="var(--line)" stroke-width="1"/>`;
+    s += `<text x="${L - 8}" y="${(y(t) + 4).toFixed(1)}" text-anchor="end" fill="var(--faint)"
+      font-family="var(--mono)" font-size="11">${t}</text>`;
+  });
+  // halt band: days with zero deliveries bracketed by active days
+  const zero = days.filter(d => D.daily[d] === 0);
+  days.forEach((d, i) => {
+    const v = D.daily[d], x = L + i * step + (step - bw) / 2;
+    const isZero = v === 0;
+    if (isZero) {
+      s += `<rect x="${(L + i * step).toFixed(1)}" y="${T}" width="${step.toFixed(1)}" height="${ih}"
+        fill="var(--stop-wash)" stroke="var(--stop)" stroke-width="1" stroke-dasharray="3 3"/>`;
+    } else {
+      const hgt = Math.max(2, T + ih - y(v));
+      s += `<rect x="${x.toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}"
+        height="${hgt.toFixed(1)}" fill="var(--accent)"/>`;
+      if (v === max) {
+        s += `<text x="${(x + bw / 2).toFixed(1)}" y="${(y(v) - 6).toFixed(1)}" text-anchor="middle"
+          fill="var(--ink)" font-family="var(--mono)" font-size="12" font-weight="600">${v}</text>`;
+      }
+    }
+    if (i % 2 === 0 || i === days.length - 1) {
+      s += `<text x="${(L + i * step + step / 2).toFixed(1)}" y="${H - B + 17}" text-anchor="middle"
+        fill="var(--faint)" font-family="var(--mono)" font-size="10.5">${d.slice(5)}</text>`;
+    }
+  });
+  // Annotate the longest unbroken gap only, and name it for what was measured —
+  // no deliveries — rather than asserting a cause the collector cannot see.
+  let best = {len: 0, start: 0}, run = 0;
+  days.forEach((d, i) => {
+    if (D.daily[d] === 0) { run++; if (run > best.len) best = {len: run, start: i - run + 1}; }
+    else run = 0;
+  });
+  if (best.len >= 2) {
+    const cx = L + best.start * step + step * best.len / 2;
+    s += `<text x="${cx.toFixed(1)}" y="${H - B + 34}" text-anchor="middle" fill="var(--stop)"
+      font-family="var(--display)" font-size="12" font-weight="600"
+      letter-spacing=".06em">NO DELIVERIES · ${best.len} DAYS</text>`;
+  }
+  s += `<line x1="${L}" x2="${W - R}" y1="${T + ih}" y2="${T + ih}" stroke="var(--line-strong)" stroke-width="1"/>`;
+  $("#chart").innerHTML = s;
+  const total = vals.reduce((a, b) => a + b, 0);
+  $("#chartNote").textContent =
+    `${total} merged over ${days.length} days from ${days[0]} · peak ${max} on ${days[vals.indexOf(max)]}` +
+    (zero.length ? ` · ${zero.length} days with none` : "");
+})();
+
+/* repos -------------------------------------------------------------------- */
+$("#repos").innerHTML = Object.entries(D.repos).map(([k, r]) => {
+  const clear = r.open === 0;
+  return `<div class="repo">
+    <div class="nm">${esc(k)}</div>
+    <div class="row"><span class="big">${r.open}</span><span class="lbl">open</span>
+      <span class="chip ${clear ? "clear" : "hold"}">${clear ? "clear" : "in flight"}</span></div>
+    <div class="lbl">${r.merged_24h} merged in last 24h</div>
+  </div>`;
+}).join("");
+
+/* agents ------------------------------------------------------------------- */
+const agents = Object.entries(D.agents)
+  .map(([n, a]) => ({ name: n, ...a, verdicts: a.accepts + a.changes }))
+  .sort((x, y) => y.merged - x.merged || y.verdicts - x.verdicts);
+const topMerged = Math.max(...agents.map(a => a.merged), 1);
+
+$("#agents").innerHTML = agents.map((a, i) => `
+  <tr tabindex="0" data-i="${i}" aria-selected="${i === 0}">
+    <td class="who">${esc(a.name)}</td>
+    <td class="num r">${a.merged}</td>
+    <td class="num r">${a.merged_24h || "·"}</td>
+    <td class="num r">${a.verdicts || "·"}</td>
+    <td><div class="bar"><i style="width:${(a.merged / topMerged * 100).toFixed(1)}%"></i></div></td>
+  </tr>`).join("");
+
+function drill(i) {
+  const a = agents[i];
+  const tot = a.verdicts;
+  const ap = tot ? (a.accepts / tot * 100) : 0;
+  $("#panel").innerHTML = `
+    <h3>${esc(a.name)}</h3>
+    <div class="role">${a.merged} deliveries · ${tot} verdicts given · last seen ${ago(a.last_seen)}</div>
+    <dl class="kv">
+      <dt>Delivered</dt><dd>${a.merged} merged (${a.merged_24h} in last 24h)</dd>
+      <dt>Reviewed</dt><dd>${a.accepts} accept · ${a.changes} changes required</dd>
+      <dt>Last seen</dt><dd>${a.last_seen ? esc(a.last_seen.replace("T", " ").replace("Z", "")) : "no record"}</dd>
+      <dt>Waiting on</dt><dd>nothing — no open lane assigned</dd>
+      <dt>Liveness</dt><dd>unknown — not reported by any harness</dd>
+      <dt>Repos</dt><dd><div class="tagrow">${(a.repos.length ? a.repos : ["—"]).map(r => `<span class="tag">${esc(r)}</span>`).join("")}</div></dd>
+    </dl>
+    ${tot ? `<div class="ratio">
+      <div class="track"><i class="a" style="width:${ap}%"></i><i class="c" style="width:${100 - ap}%"></i></div>
+      <div class="cap"><span>${a.accepts} accepted</span><span>${a.changes} sent back</span></div>
+    </div>` : ""}`;
+  document.querySelectorAll("#agents tr").forEach(tr =>
+    tr.setAttribute("aria-selected", tr.dataset.i === String(i)));
+}
+$("#agents").addEventListener("click", e => {
+  const tr = e.target.closest("tr"); if (tr) drill(+tr.dataset.i);
+});
+$("#agents").addEventListener("keydown", e => {
+  if (e.key === "Enter" || e.key === " ") {
+    const tr = e.target.closest("tr");
+    if (tr) { e.preventDefault(); drill(+tr.dataset.i); }
+  }
+});
+drill(0);
+
+/* workspaces --------------------------------------------------------------- */
+const ws = [...D.workspaces].sort((a, b) => (b.dirty_files - a.dirty_files) || ((b.size_mb || 0) - (a.size_mb || 0)));
+$("#ws").innerHTML = ws.map(w => `
+  <tr>
+    <td class="path"><span class="dot ${w.dirty_files ? "d" : ""}"></span>${esc(w.path)}</td>
+    <td class="path">${esc(w.branch || "—")}</td>
+    <td class="num r">${w.dirty_files || "·"}</td>
+    <td class="num r">${w.unpushed || "·"}</td>
+    <td class="num r">${w.size_mb != null ? w.size_mb + " MB" : "?"}</td>
+  </tr>`).join("");
+$("#wsNote").textContent =
+  `${ws.length} checkouts · ${gb} GB · ${dirty} hold uncommitted work and must not be cleaned automatically`;
+
+/* crew: the-hill's own state ----------------------------------------------- */
+(() => {
+  const H = D.hill; if (!H) return;
+  const byAgent = {};
+  (H.live || []).forEach(r => byAgent[r.agent] = {...r});
+  (H.claims || []).forEach(c => {
+    byAgent[c.agent] = byAgent[c.agent] || {agent: c.agent, freshness: "no tick", age_s: null};
+    (byAgent[c.agent].holds = byAgent[c.agent].holds || []).push(c.key);
+  });
+  const rows = Object.values(byAgent);
+  if (!rows.length) return;                      // nothing local yet; stay hidden
+  document.getElementById("crewSec").hidden = false;
+  const pill = f => {
+    const col = f === "fresh" ? "var(--run)" : f === "stale" ? "var(--stop)" : "var(--attn)";
+    return `<span class="chip" style="color:${col};background:var(--surface)">${esc(f)}</span>`;
+  };
+  $("#crew").innerHTML = rows.map(r => `
+    <tr style="cursor:default">
+      <td class="who">${esc(r.agent)}</td>
+      <td>${pill(r.freshness || "no tick")}</td>
+      <td class="num r">${r.age_s == null ? "—" : r.age_s + "s"}</td>
+      <td class="path">${(r.holds || []).map(esc).join(", ") || "—"}</td>
+      <td class="num r">${(H.unread_by_agent || {})[r.agent] || "·"}</td>
+    </tr>`).join("");
+  $("#crewNote").textContent =
+    `${(H.claims || []).length} lane(s) claimed · ${(H.live || []).length} agent(s) ticked · `
+    + `a stale tick means unknown, not stopped`;
+})();
+
+/* time and usage ----------------------------------------------------------- */
+(() => {
+  const U = D.usage, L = D.lead_time;
+  if (!U) return;
+  const compact = n => n >= 1e9 ? (n/1e9).toFixed(1)+"B" : n >= 1e6 ? (n/1e6).toFixed(1)+"M"
+    : n >= 1e3 ? (n/1e3).toFixed(1)+"k" : String(n);
+  const money = v => "$" + v.toLocaleString("en-US", {maximumFractionDigits: 0});
+
+  $("#useNote").textContent =
+    `${U.source} · last ${U.window_days} days · ${D.sessions.length} sessions`;
+
+  $("#useStats").innerHTML = [
+    ["Active time", U.total.active_h.toFixed(0) + "h", `across ${U.total.turns.toLocaleString()} model turns`],
+    ["Output tokens", compact(U.total.tokens.output), `${compact(U.total.tokens.thinking)} of it thinking`],
+    ["Cache read", compact(U.total.tokens.cache_read), `vs ${compact(U.total.tokens.cache_write)} written`],
+    ["Median lead time", (L && L.median_h != null ? L.median_h + "h" : "—"),
+      (L && L.p90_h != null ? `p90 ${L.p90_h}h · ${L.n} deliveries` : "opened to merged")],
+  ].map(([k, v, n]) =>
+    `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div><div class="n">${esc(n)}</div></div>`
+  ).join("");
+
+  // Rates are not read from any account. They are inputs, and the result is
+  // labelled an estimate everywhere it appears.
+  const RATES = [
+    ["input", "Input", 15],
+    ["output", "Output", 75],
+    ["cache_write", "Cache write", 18.75],
+    ["cache_read", "Cache read", 1.5],
+  ];
+  $("#rateNote").textContent = "US dollars per million tokens. Not read from your account — edit to match.";
+  $("#rates").innerHTML = RATES.map(([k, lbl, def]) =>
+    `<label for="r_${k}">${lbl}</label>
+     <input id="r_${k}" type="number" min="0" step="0.25" value="${def}" data-k="${k}">`).join("");
+
+  const rate = () => Object.fromEntries(RATES.map(([k]) =>
+    [k, parseFloat(document.getElementById("r_" + k).value) || 0]));
+  const costOf = (t, r) => (t.input * r.input + t.output * r.output +
+    t.cache_write * r.cache_write + t.cache_read * r.cache_read) / 1e6;
+
+  function render() {
+    const r = rate();
+    const rows = Object.entries(U.by_model).sort((a, b) => b[1].turns - a[1].turns);
+    $("#models").innerHTML = rows.map(([m, v]) => `
+      <tr style="cursor:default">
+        <td class="who">${esc(m)}</td>
+        <td class="num r">${v.turns.toLocaleString()}</td>
+        <td class="num r">${v.active_h.toFixed(0)}h</td>
+        <td class="num r">${compact(v.tokens.output)}</td>
+        <td class="num r">${compact(v.tokens.cache_read)}</td>
+        <td class="num r">${money(costOf(v.tokens, r))}</td>
+      </tr>`).join("");
+    const g = costOf(U.total.tokens, r);
+    $("#modelsFoot").innerHTML = `<tr>
+      <td>All models</td>
+      <td class="r">${U.total.turns.toLocaleString()}</td>
+      <td class="r">${U.total.active_h.toFixed(0)}h</td>
+      <td class="r">${compact(U.total.tokens.output)}</td>
+      <td class="r">${compact(U.total.tokens.cache_read)}</td>
+      <td class="r">${money(g)}</td></tr>`;
+    $("#grand").textContent = money(g);
+    $("#planNote").textContent =
+      `This is what the same tokens would cost billed per token on the API. A subscription ` +
+      `plan does not charge that way, so treat it as the scale of the work, not an invoice. ` +
+      `Covers Claude Code sessions on this machine only — ${U.not_covered}.`;
+  }
+  $("#rates").addEventListener("input", render);
+  render();
+})();
+
+</script>
