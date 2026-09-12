@@ -163,7 +163,23 @@ def _checkouts(roots: list[Path] | None) -> list[Path]:
         else:
             group = sorted(p for p in root.iterdir() if p.is_dir() and not p.is_symlink())
         for path in group:
-            add(path)
+            if add(path):
+                continue
+            # A plain directory holding checkouts -- `.ai-team-lanes/`, or a
+            # quarantine box someone moved lanes into. Normally the second pass
+            # reaches those through their clone's own worktree list, but that
+            # fails exactly when it matters most: when the clone that owned them
+            # has been deleted, leaving orphans nothing else can see. 220 MB of
+            # them sat unreported on this machine. One level only, and only
+            # things that are actually checkouts, so a directory of notes does
+            # not become a workspace listing.
+            try:
+                children = sorted(p for p in path.iterdir()
+                                  if p.is_dir() and not p.is_symlink())
+            except OSError:
+                continue
+            for child in children:
+                add(child)
 
     # Second pass over what the roots found: a repo's own worktree list reaches
     # the ones nested inside it. Iterating over a copy keeps this to one hop, so

@@ -220,3 +220,92 @@ class DeliveredTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OrphanedContainerTest(WorkspaceFixture):
+    """A directory of worktrees whose parent clone is gone must still be seen.
+
+    Found by walking into it: 220 MB of quarantined lane worktrees on this
+    machine were invisible to `hill workspaces`. Their container has no `.git`,
+    so the root scan dropped it, and the second pass could not reach them
+    either because it walks a repo's own `git worktree list` and the clone that
+    owned them had been deleted. Nothing was wrong with the safety rules --
+    handed the container directly the tool refuses every one of them with
+    "could not read git state". It simply never looked, and a workspace tool
+    that silently omits the largest reclaimable thing on the disk is reporting
+    what it could parse, not what is there.
+    """
+
+    def quarantine(self) -> Path:
+        """Move a worktree into a plain directory and orphan it."""
+        box = self.tmp / ".lanes-quarantine"
+        box.mkdir()
+        moved = box / "orphan"
+        shutil.move(str(self.done), str(moved))
+        # Break the link the way a deleted parent clone does: the .git file
+        # still points at an admin dir that is no longer there.
+        (moved / ".git").write_text("gitdir: /nonexistent/.git/worktrees/orphan\n",
+                                    encoding="utf-8")
+        return moved
+
+    def test_an_orphaned_worktree_in_a_container_is_found(self):
+        moved = self.quarantine()
+        found = {Path(r["path"]).name for r in workspace.scan(roots=[self.tmp])}
+        self.assertIn(moved.name, found)
+
+    def test_it_is_never_offered_for_removal(self):
+        # The safety property that already held, pinned so discovery cannot
+        # quietly start deleting what it cannot verify.
+        self.quarantine()
+        rows = {Path(r["path"]).name: r for r in workspace.scan(roots=[self.tmp])}
+        row = rows["orphan"]
+        self.assertFalse(row["safe_to_remove"])
+        self.assertIn("git", row["reason"])
+
+    def test_a_container_of_ordinary_directories_adds_nothing(self):
+        # One level down, and only things that are actually checkouts, so a
+        # directory of notes does not become a workspace listing.
+        box = self.tmp / "notes"
+        (box / "a").mkdir(parents=True)
+        (box / "b").mkdir(parents=True)
+        write(box / "a" / "note.txt", "hello\n")
+        found = {Path(r["path"]).name for r in workspace.scan(roots=[self.tmp])}
+        self.assertNotIn("a", found)
+        self.assertNotIn("b", found)
+
+
+class DisplayFlagTest(unittest.TestCase):
+    """The word printed beside a workspace, which is all most readers see.
+
+    Kept as a pure function of a row so the two cases that look alike -- an
+    orphan git cannot read, and a fresh repo whose branch has no commits yet --
+    stay distinguishable. Keying on the missing head alone labelled
+    ~/repo/laravel/mariabelimbing "unreadable" while it held 27 uncommitted
+    files, which is the opposite of what a cleanup tool exists to surface.
+    """
+
+    @staticmethod
+    def flag(row):
+        if not row.get("head") and not row.get("branch"):
+            return "unreadable"
+        if row["dirty"]:
+            return "dirty"
+        if row["unpushed"]:
+            return "unpushed"
+        return "clean"
+
+    def test_orphan_with_no_head_and_no_branch_is_unreadable(self):
+        self.assertEqual(self.flag(
+            {"head": "", "branch": None, "dirty": 0, "unpushed": 0}), "unreadable")
+
+    def test_unborn_branch_with_uncommitted_work_is_dirty_not_unreadable(self):
+        self.assertEqual(self.flag(
+            {"head": "", "branch": "main", "dirty": 27, "unpushed": 0}), "dirty")
+
+    def test_an_ordinary_clean_checkout_is_clean(self):
+        self.assertEqual(self.flag(
+            {"head": "e397ec15", "branch": "main", "dirty": 0, "unpushed": 0}), "clean")
+
+    def test_unpushed_outranks_clean(self):
+        self.assertEqual(self.flag(
+            {"head": "e397ec15", "branch": "x", "dirty": 0, "unpushed": 2}), "unpushed")

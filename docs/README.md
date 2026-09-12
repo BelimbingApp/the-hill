@@ -64,6 +64,15 @@ disagrees*, it found an acceptance bound to the head and the gate refused the
 pull request anyway — trust the gate and go read its log, because the board's
 scan is the weaker of the two and knows it.
 
+**A workspace git cannot read is shown, not skipped.** An orphaned worktree —
+one whose parent clone was deleted, so its `.git` file points at an admin
+directory that no longer exists — is listed as `unreadable` and never offered
+for removal. It is reported rather than omitted because the tool's whole job is
+saying what is on the disk, and the largest reclaimable thing on this machine
+was invisible to it for four days. Note that a fresh repository whose branch
+has no commits yet also has no resolvable head; that is not unreadable, and it
+can hold uncommitted work.
+
 **Cleanup refuses to delete work that was never published.** Uncommitted files or
 unpushed commits mean the worktree is kept, and it handles squash merges — a
 squash-merged branch is not an ancestor of main, so a naive check would call

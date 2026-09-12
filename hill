@@ -148,7 +148,25 @@ def cmd_workspaces(args):
     if args.json:
         return out(rows, args)
     for w in rows:
-        flag = "dirty" if w["dirty"] else ("unpushed" if w["unpushed"] else "clean")
+        # No head AND no branch means git could not be read at all -- an
+        # orphaned worktree whose admin dir is gone. Printing that as "clean" is
+        # the same lie as calling an unreviewed lane landable: dirty and
+        # unpushed are both 0 because nothing was measured, not because it was
+        # measured and found empty.
+        #
+        # Both conditions are needed. A fresh repo on an unborn branch also has
+        # no head, but git reads there perfectly and it can hold uncommitted
+        # work -- ~/repo/laravel/mariabelimbing has 27 such files. Keying on the
+        # head alone called that unreadable and hid exactly the thing worth
+        # seeing.
+        if not w.get("head") and not w.get("branch"):
+            flag = "unreadable"
+        elif w["dirty"]:
+            flag = "dirty"
+        elif w["unpushed"]:
+            flag = "unpushed"
+        else:
+            flag = "clean"
         print(f"  {flag:<9} {w['branch'] or '-':<34} {w['path']}")
 
 
