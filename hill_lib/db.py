@@ -195,6 +195,38 @@ def outbox(con, limit: int = 50) -> list[dict]:
         "SELECT * FROM messages ORDER BY id DESC LIMIT ?", (limit,))]
 
 
+def message_seen(con, external_id: str, agent: str) -> bool:
+    """Has this agent already been shown a message carried by GitHub?
+
+    Keyed by the comment id rather than a local row, so the same board message
+    read on this machine stays read here across restarts. Deliberately local:
+    read state is what THIS host has shown you, and the same agent on another
+    machine sees the backlog again.
+    """
+    row = con.execute(
+        "SELECT 1 FROM message_reads WHERE message_id = ? AND agent = ?",
+        (_external_key(external_id), agent)).fetchone()
+    return row is not None
+
+
+def mark_seen(con, external_id: str, agent: str) -> None:
+    with con:
+        con.execute(
+            "INSERT OR IGNORE INTO message_reads (message_id, agent, read_at) "
+            "VALUES (?,?,?)", (_external_key(external_id), agent, now()))
+
+
+def _external_key(external_id: str) -> int:
+    """A stable negative row id for a message that lives on GitHub.
+
+    message_reads.message_id is an integer keyed to local messages. Negative
+    keys cannot collide with a local rowid, so both kinds of read state share
+    one table without a migration or a second one to keep in step.
+    """
+    digits = "".join(ch for ch in external_id if ch.isdigit())
+    return -int(digits) if digits else -abs(hash(external_id))
+
+
 def events(con, limit: int = 200) -> list[dict]:
     return [dict(r) for r in con.execute(
         "SELECT * FROM events ORDER BY id DESC LIMIT ?", (limit,))]

@@ -179,27 +179,86 @@ def cmd_claims(args):
 
 
 def cmd_send(args):
-    con = db.connect()
+    from hill_lib import mail
     body = args.body
     if body == "-":
         body = sys.stdin.read()
-    mid = db.send(con, agent_id(args), args.to, body, ref=args.ref)
-    out({"id": mid, "to": args.to, "ref": args.ref,
-         "note": "queued; this does not wake the recipient — use the harness's "
-                 "own messaging for that, or they read it on their next turn"}, args)
+    me = agent_id(args)
+
+    board = None if args.local else mail.board()
+    if board is None and not args.local:
+        # A message that never leaves this machine while reporting success is
+        # the whole defect. Refuse and say what to set.
+        print("no board configured, so a message cannot reach another machine.",
+              file=sys.stderr)
+        print("  set one:  export HILL_BOARD=owner/repo#123", file=sys.stderr)
+        print("  or keep it on this machine:  hill send ... --local", file=sys.stderr)
+        sys.exit(6)
+
+    if board is None:
+        con = db.connect()
+        mid = db.send(con, me, args.to, body, ref=args.ref)
+        return out({"id": mid, "to": args.to, "ref": args.ref, "scope": "this machine only",
+                    "note": "local: another machine cannot see this"}, args)
+
+    repo, number = board
+    try:
+        url = mail.post(repo, number, me, args.to, body, ref=args.ref)
+    except mail.Unreachable as exc:
+        print(f"could not deliver through {repo}#{number}: {exc}", file=sys.stderr)
+        sys.exit(6)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(6)
+    out({"to": args.to, "ref": args.ref, "board": f"{repo}#{number}", "url": url,
+         "note": "delivered to the board; this does not wake the recipient — "
+                 "they see it on their next `hill inbox`"}, args)
 
 
 def cmd_inbox(args):
+    from hill_lib import mail
     con = db.connect()
-    rows = db.inbox(con, agent_id(args), unread_only=not args.all, mark=not args.peek)
+    me = agent_id(args)
+    rows = db.inbox(con, me, unread_only=not args.all, mark=not args.peek)
+
+    remote, problem = [], None
+    board = None if args.local else mail.board()
+    if board is not None:
+        repo, number = board
+        try:
+            for m in mail.fetch(repo, number):
+                if m["to"] != me.lower():
+                    continue
+                # Read state is local by design: it is what THIS machine has
+                # shown you. The same agent on another host sees the backlog
+                # again, which is said out loud rather than discovered.
+                if not args.all and db.message_seen(con, f"gh:{m['id']}", me):
+                    continue
+                remote.append(m)
+                if not args.peek:
+                    db.mark_seen(con, f"gh:{m['id']}", me)
+        except mail.Unreachable as exc:
+            problem = str(exc)
+
     if args.json:
-        return out(rows, args)
-    if not rows:
-        print("inbox empty")
+        return out({"local": rows, "board": remote, "board_error": problem}, args)
+
     for m in rows:
-        print(f"\n--- #{m['id']} from {m['sender']} at {m['sent_at']}"
+        print(f"\n--- #{m['id']} from {m['sender']} at {m['sent_at']} (this machine)"
               + (f"\n    ref: {m['ref']}" if m["ref"] else ""))
         print(m["body"])
+    for m in remote:
+        print(f"\n--- from {m['sender']} at {m['at']}  {m['url']}"
+              + (f"\n    ref: {m['ref']}" if m["ref"] else ""))
+        print(m["body"])
+    if problem:
+        # Unreachable is not an empty inbox.
+        print(f"\ncould not read the board: {problem}", file=sys.stderr)
+        print("your inbox may be incomplete", file=sys.stderr)
+    elif board is None and not args.local:
+        print("\nno board configured (HILL_BOARD), so only this machine was read")
+    if not rows and not remote and not problem:
+        print("inbox empty")
 
 
 def cmd_events(args):
@@ -327,10 +386,13 @@ def main(argv=None):
     s = sub.add_parser("send", parents=[common], help="queue a message for another agent")
     s.add_argument("to"); s.add_argument("body", help="text, or - for stdin")
     s.add_argument("--ref", help="the durable handoff this refers to (PR or issue URL)")
+    s.add_argument("--local", action="store_true",
+                   help="keep it on this machine; no other host will see it")
     s.set_defaults(fn=cmd_send)
 
     s = sub.add_parser("inbox", parents=[common], help="read messages addressed to this agent")
     s.add_argument("--all", action="store_true"); s.add_argument("--peek", action="store_true")
+    s.add_argument("--local", action="store_true", help="skip the board; this machine only")
     s.set_defaults(fn=cmd_inbox)
 
     s = sub.add_parser("events", parents=[common], help="recent local events")

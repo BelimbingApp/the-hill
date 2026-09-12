@@ -171,6 +171,7 @@ Four kinds of information, in three places, chosen deliberately:
 | What was delivered and reviewed | GitHub | It is already the record, and it works across machines |
 | Who holds which lane, across machines | GitHub: the `agent:<id>` label and the open-PR registry | It is the only thing every machine can see |
 | Races between agents on **one** machine, and messages | SQLite, `state/hill.db` | Several local agents write at once, so it needs real locking |
+| Messages between machines | GitHub: comments on the board issue (`HILL_BOARD`) | They must outlive the machine that sent them |
 | Liveness and capacity | one file per agent in `live/` | Each agent writes only its own file, so no locking is needed |
 
 The rule that keeps it honest: SQLite holds **observations and messages, never

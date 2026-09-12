@@ -72,9 +72,20 @@ same question and they will disagree.
 
 ## Things that will bite you if you forget them
 
-**A message does not wake anyone.** `hill send` puts it in a mailbox. If the
-recipient is a Claude Code session, use that harness's own messaging to wake it.
-Otherwise the message waits until the agent next runs `hill inbox`.
+**Messages travel on the board, not on this disk.** `hill send` posts a comment
+to `HILL_BOARD` (`owner/repo#number`) carrying `**From:**` and `**To:**`
+markers. Both markers together are what makes it mail — an ordinary status post
+carries `From` alone and is not read as mail. With no board configured, `send`
+**refuses** rather than writing a local row that no other machine can see;
+`--local` keeps it here deliberately.
+
+Read state is local on purpose: it is what this host has shown you. The same
+agent on a second machine sees the backlog again. `--all` re-reads what you have
+already seen; nothing is ever deleted.
+
+**A message does not wake anyone.** It waits until the recipient next runs
+`hill inbox`. If they are a Claude Code session, use that harness's own
+messaging to wake them.
 
 **A claim is checked against GitHub, not just this machine.** `hill claim`
 reads the two sources ai-team's `claim.sh` reads — the issue's `agent:<id>`
