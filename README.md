@@ -1,9 +1,14 @@
 # the-hill
 
 Tools for running a team of AI agents across several repositories. One checkout
-per machine at `~/.the-hill`. Update it with `git pull`. There is no version
-number and no release process — `hill version` tells you when the checkout was
-last updated.
+per machine at `~/.the-hill`. There is no version number and no release
+process — `hill version` tells you when the checkout was last updated.
+
+> **This checkout has no git remote yet.** It is a local repository on one
+> machine, so there is nowhere to clone it from and `git pull` has nothing to
+> fetch. The per-machine model below is how it is meant to work once a remote
+> exists; until someone pushes it somewhere, copy the directory to get it onto
+> a second machine. `git remote -v` tells you whether this still applies.
 
 ## Requirements
 
@@ -22,10 +27,17 @@ last updated.
 ## Setup
 
 ```bash
-git clone <this-repo> ~/.the-hill
+# once a remote exists:
+git clone <remote> ~/.the-hill
+# today, from the machine that has it:
+cp -a /path/to/the-hill ~/.the-hill
+
 cd ~/.the-hill
 ./hill version          # confirms where the checkout is and when it was updated
 ```
+
+`hill version` reports `local_edits` so you can tell a checkout you have
+changed from one you have not.
 
 Put it on your `PATH` and name yourself once, in your shell profile:
 
