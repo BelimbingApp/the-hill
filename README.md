@@ -127,7 +127,8 @@ Three kinds of information, kept in three places on purpose:
 | What | Where | Why |
 |---|---|---|
 | What was delivered and reviewed | GitHub | It is already the record, and it works across machines |
-| Who holds which lane, and messages | SQLite, `state/hill.db` | Several agents write at once, so it needs real locking |
+| Who holds which lane, across machines | GitHub: the `agent:<id>` label and the open-PR registry | It is the only thing every machine can see |
+| Races between agents on **one** machine, and messages | SQLite, `state/hill.db` | Several local agents write at once, so it needs real locking |
 | Liveness and capacity | one file per agent in `live/` | Each agent writes only its own file, so no locking is needed |
 
 The rule that keeps this honest: SQLite holds **observations and messages, never
@@ -158,6 +159,18 @@ Set `HILL_AGENT` once and you can drop `--agent`.
 **A message does not wake anyone.** `hill send` puts it in a mailbox. If the
 recipient is a Claude Code session, use that harness's own messaging to wake it.
 Otherwise the message waits until the agent next runs `hill inbox`.
+
+**A claim is checked against GitHub, not just this machine.** `hill claim`
+reads the two sources ai-team's `claim.sh` reads — the issue's `agent:<id>`
+label, and any open pull request referencing `(#N)` — and refuses a lane
+somebody else holds, naming them and where it saw them. A local SQLite claim
+is an observation about one host; it cannot settle anything between machines,
+because no other machine can read it.
+
+Neither source is a lock. There is a window between the read and your write,
+and ai-team does not pretend otherwise: a collision is *detected and named*,
+not prevented. If GitHub cannot be read the claim is **refused**, because
+unreachable is not the same as free — `--local` overrides that and says so.
 
 **Taking a lane does not stop the other agent.** `--take` records the takeover so
 it is visible, but it cannot fence a writer. Two agents can still be writing. Keep

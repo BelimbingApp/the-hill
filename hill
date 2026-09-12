@@ -84,9 +84,46 @@ def cmd_who(args):
 
 
 def cmd_claim(args):
+    from hill_lib import floor
+    me = agent_id(args)
+
+    # The shared floor first. SQLite settles a race between two agents on this
+    # machine; it says nothing about the other machines, so consulting it alone
+    # is how two hosts end up on one lane. GitHub is what every machine can see.
+    if not args.local:
+        target = floor.parse_key(args.key)
+        if target is None:
+            print(f"note: {args.key} does not name a GitHub lane, so only this "
+                  f"machine is checked", file=sys.stderr)
+        else:
+            repo, number = target
+            try:
+                seen = floor.holders(repo, number)
+            except floor.Unreachable as exc:
+                # Unreachable is not free. Refuse by default and make the
+                # override explicit, because silence reading as "nobody holds
+                # it" is the failure this whole check exists to prevent.
+                print(f"cannot read {repo}#{number} from GitHub: {exc}", file=sys.stderr)
+                print("the shared floor is unknown, not empty — pass --local to "
+                      "claim on this machine anyway, knowing that", file=sys.stderr)
+                sys.exit(5)
+            others = {a: w for a, w in seen["holders"].items() if a != me}
+            if others and not args.take:
+                for agent, where in sorted(others.items()):
+                    print(f"held by {agent} on the shared floor:", file=sys.stderr)
+                    for w in where:
+                        print(f"  {w}", file=sys.stderr)
+                print("pass --take to take it over (recorded), or work another "
+                      "lane; this is a read of GitHub, not a lock, so a claim "
+                      "made elsewhere in the last few seconds may not show yet",
+                      file=sys.stderr)
+                sys.exit(3)
+            if seen.get("state") == "closed":
+                print(f"note: {repo}#{number} is closed", file=sys.stderr)
+
     con = db.connect()
     try:
-        rec = db.claim(con, args.key, agent_id(args), session=args.session,
+        rec = db.claim(con, args.key, me, session=args.session,
                        note=args.note, take=args.take)
     except db.Held as e:
         print(f"held by {e.row['agent']} since {e.row['claimed_at']}", file=sys.stderr)
@@ -244,6 +281,9 @@ def main(argv=None):
     s.add_argument("key", help="<repo>#<lane>, e.g. blb-people#476")
     s.add_argument("--note"); s.add_argument("--session")
     s.add_argument("--take", action="store_true", help="take over a held lane (recorded)")
+    s.add_argument("--local", action="store_true",
+                   help="skip the GitHub check and claim on this machine only "
+                        "(the shared floor then goes unchecked, not verified empty)")
     s.set_defaults(fn=cmd_claim)
 
     s = sub.add_parser("release", parents=[common], help="give up a lane")
