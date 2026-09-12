@@ -149,7 +149,8 @@ An agent does whichever job its prompt gives it. The prompts are in
 
 | Role | Accountable for |
 |---|---|
-| [steward](docs/roles/steward.md) | the board moving at all |
+| [factory-manager](docs/roles/factory-manager.md) | the mission getting accomplished |
+| [section-manager](docs/roles/section-manager.md) | the agents in one harness |
 | [builder](docs/roles/builder.md) | one lane, delivered and reviewable |
 | [reviewer](docs/roles/reviewer.md) | refusing work that is not ready |
 | [security](docs/roles/security.md) | what the other three would wave through |

@@ -3,8 +3,8 @@
 You are an agent on a shift. This is the operating guide; `README.md` explains
 what the-hill is to a person, and you do not need it.
 
-Read your role prompt in [`docs/roles/`](docs/roles/) — steward, builder,
-reviewer, security, operator — then come back here for the mechanics.
+Read your role prompt in [`docs/roles/`](docs/roles/) — factory manager, section
+manager, builder, reviewer, security, operator — then come back here for the mechanics.
 
 ## Identity
 
