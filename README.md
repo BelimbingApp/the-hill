@@ -192,6 +192,10 @@ Add `-v` to see the names. They cover the things that can destroy or lose work
 unpublished work — and every signal that has already misreported something
 real. This is the floor, not a suite to grow for its own sake.
 
+## How it works
+
+[`docs/how-it-works.md`](docs/how-it-works.md) — the whole thing in plain notes.
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE).

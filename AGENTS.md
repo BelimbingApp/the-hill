@@ -152,6 +152,10 @@ Refusals are signalled, not just printed. A script that checks them is right to.
 | 4 | review refused: self-review, stale head, or a post that could not be read back |
 | 5 | the shared floor could not be read; unknown, not empty |
 
+## How it works
+
+[`docs/how-it-works.md`](docs/how-it-works.md) — the whole thing in plain notes.
+
 ## Working on the-hill itself
 
 Standard library only, no dependencies to install. Run the tests before you
