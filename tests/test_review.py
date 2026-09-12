@@ -188,15 +188,28 @@ class SubmitTest(unittest.TestCase):
         self.assertIn("**Verdict:** accept", res["marker"].split("\n"))
         self.assertEqual(self._posts(run.call_args_list), [])
 
-    def test_dry_run_with_a_confirmed_head_runs_no_subprocess_at_all(self):
+    def test_dry_run_with_head_and_author_known_runs_no_subprocess_at_all(self):
+        # Both facts consulted, nothing else touched. Authorship joined the
+        # head here deliberately: a dry run that cannot say "this would be
+        # refused as a self-review" has failed at the one job a dry run has.
         with mock.patch.object(review, "current_head", return_value=SHA):
-            with mock.patch("hill_lib.review.subprocess.run",
-                            side_effect=AssertionError("nothing to run")) as run:
-                res = review.submit(repo="o/r", pr=1, head=SHA, verdict="accept",
-                                    agent=AGENT, dry_run=True)
+            with mock.patch.object(review, "lane_author", return_value="someone-else"):
+                with mock.patch("hill_lib.review.subprocess.run",
+                                side_effect=AssertionError("nothing to run")) as run:
+                    res = review.submit(repo="o/r", pr=1, head=SHA, verdict="accept",
+                                        agent=AGENT, dry_run=True)
         self.assertEqual(res, {"ok": True, "dry_run": True,
                                "marker": review.render(AGENT, SHA, "accept")})
         self.assertEqual(run.call_args_list, [])
+
+    def test_a_dry_run_still_catches_a_self_review(self):
+        # The reason the property above had to change.
+        with mock.patch.object(review, "current_head", return_value=SHA):
+            with mock.patch.object(review, "lane_author", return_value=AGENT):
+                res = review.submit(repo="o/r", pr=1, head=SHA, verdict="accept",
+                                    agent=AGENT, dry_run=True)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["error"], "self-review")
 
     def test_validation_fails_before_any_network_call(self):
         with mock.patch("hill_lib.review.subprocess.run",
@@ -284,11 +297,17 @@ class PostTest(unittest.TestCase):
             return post
 
         post_body = [""]
-        with mock.patch.object(review, "current_head", return_value=SHA):
+        with mock.patch.object(review, "lane_author", return_value="someone-else"):
+          with mock.patch.object(review, "current_head", return_value=SHA):
             with mock.patch("hill_lib.review.subprocess.run", side_effect=fake_run) as run:
                 res = review.submit(repo="o/r", pr=9, head=SHA, verdict="changes",
                                     agent=AGENT, body="one finding")
-        first = run.call_args_list[0]
+        # Find the post by what it is, not by position: the calls before and
+        # after it are lookups, and asserting on call 0 broke the moment one
+        # was added in front.
+        posts = [c for c in run.call_args_list if c.args[0][:3] == ["gh", "pr", "review"]]
+        self.assertEqual(len(posts), 1)
+        first = posts[0]
         self.assertEqual(first.args[0], ["gh", "pr", "review", "9", "--repo", "o/r",
                                          "--comment", "--body-file", "-"])
         # The record goes in on stdin, not on the command line.
@@ -372,3 +391,48 @@ class PostedReviewLookupTests(unittest.TestCase):
 
     def test_no_reviews_is_not_found_rather_than_an_error(self):
         self.assertIsNone(self.find([]))
+
+
+class SelfReviewTest(unittest.TestCase):
+    """The one rule every role prompt states, enforced by the tool.
+
+    It was not. `hill review` composed a valid accept marker for a lane the
+    caller had authored. review_gate.sh would have refused it at merge time and
+    the board excludes an author's own verdict, so it could not land anything --
+    but it would have posted a misleading acceptance on a real pull request,
+    and the rule is stated in five documents that the tool did not honour.
+    """
+
+    def submit(self, agent, author, **kw):
+        with mock.patch.object(review, "lane_author", return_value=author):
+            with mock.patch.object(review, "current_head", return_value=SHA):
+                return review.submit(repo="o/r", pr=9, head=SHA, verdict="accept",
+                                     agent=agent, dry_run=True, **kw)
+
+    def test_the_lanes_own_author_is_refused(self):
+        res = self.submit("opus-max", "opus-max")
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["error"], "self-review")
+        self.assertNotIn("marker", res, "no record may be composed for a self-review")
+
+    def test_case_and_spacing_do_not_defeat_it(self):
+        for agent, author in ((" Opus-Max ", "opus-max"), ("OPUS-MAX", "opus-max")):
+            with self.subTest(agent=agent):
+                self.assertFalse(self.submit(agent, author)["ok"])
+
+    def test_force_does_not_lift_it(self):
+        # --force exists for a head that moved under a review genuinely done,
+        # not for reviewing yourself.
+        self.assertFalse(self.submit("opus-max", "opus-max", force=True)["ok"])
+
+    def test_another_agents_lane_is_allowed(self):
+        res = self.submit("astra", "opus-max")
+        self.assertTrue(res["ok"])
+        self.assertIn("**From:** astra", res["marker"])
+
+    def test_unknown_authorship_is_flagged_not_assumed_safe(self):
+        # Offline, or a lane with no agent label. It proceeds -- refusing every
+        # review whenever gh is unreachable would be worse -- but says so.
+        res = self.submit("astra", None)
+        self.assertTrue(res["ok"])
+        self.assertTrue(res["author_unverified"])

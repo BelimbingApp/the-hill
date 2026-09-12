@@ -192,6 +192,12 @@ def cmd_review(args):
                         agent=agent_id(args), body=body, dry_run=args.dry_run,
                         force=args.force)
     out(res, args)
+    # A refusal printed in the output and a zero exit code is a tool lying to
+    # any script that checks it: `hill review ... && echo posted` reported
+    # success for a self-review, a stale head, and a post that could not be
+    # read back. Every failure path exits 4, the way claim exits 3.
+    if not res.get("ok"):
+        return 4
 
 
 def cmd_board(args):
@@ -267,7 +273,10 @@ def main(argv=None):
     s.add_argument("--apply", action="store_true")
     s.set_defaults(fn=cmd_cleanup)
 
-    s = sub.add_parser("review", parents=[common], help="publish a canonical verdict so nobody types the markers")
+    s = sub.add_parser("review", parents=[common],
+                       help="publish a canonical verdict so nobody types the markers "
+                            "(exits 4 if it refuses: self-review, stale head, or "
+                            "a post that could not be read back)")
     s.add_argument("repo"); s.add_argument("pr", type=int)
     s.add_argument("--head", required=True); s.add_argument("--verdict", required=True,
                                                             choices=["accept", "changes"])

@@ -128,6 +128,31 @@ def render(agent: str, head: str, verdict: str, body: str = "") -> str:
     return text
 
 
+def lane_author(repo: str, pr: int) -> str | None:
+    """The agent whose lane this is, from its `agent:<id>` label.
+
+    None means unknown -- offline, no such pull request, or no agent label --
+    and never means "nobody". The caller has to keep those apart, because
+    treating unknown as nobody is how a self-review gets through.
+
+    Same source the gate uses. review_gate.sh refuses a verdict whose author
+    equals the lane's agent, so a self-review cannot land a pull request; what
+    it can do without this check is post a misleading acceptance on one.
+    """
+    try:
+        proc = subprocess.run(
+            ["gh", "api", f"repos/{repo}/pulls/{pr}",
+             "--jq", '[.labels[].name | select(startswith("agent:"))] | .[0] // ""'],
+            capture_output=True, text=True, timeout=_GH_TIMEOUT,
+        )
+    except Exception:
+        return None
+    if proc.returncode != 0:
+        return None
+    name = (proc.stdout or "").strip()
+    return name[len("agent:"):].strip().lower() if name.startswith("agent:") else None
+
+
 def current_head(repo: str, pr: int) -> str | None:
     """The PR's head SHA according to GitHub, or None if we could not find out.
 
@@ -159,7 +184,19 @@ def submit(repo: str, pr: int, head: str, verdict: str, agent: str,
     text = render(agent=agent, head=head, verdict=verdict, body=body)
     reviewed = head.strip().lower()      # render() already proved the shape
 
+    # The one rule every role prompt in docs/roles/ states, enforced here as
+    # well as socially. `force` does not lift it: force exists for a head that
+    # moved under a review that was genuinely done, not for reviewing yourself.
+    author = lane_author(repo, pr)
+    if author is not None and author == agent.strip().lower():
+        return {"ok": False, "error": "self-review",
+                "detail": f"{agent} is the agent on {repo}#{pr}; a lane's own "
+                          f"author may not post a verdict on it"}
+
     extra: dict = {}
+    if author is None:
+        # Unknown authorship is reported, not assumed safe.
+        extra["author_unverified"] = True
     if not force:
         cur = current_head(repo, pr)
         if cur is None:
