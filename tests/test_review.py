@@ -12,7 +12,9 @@ rendered text is matched against them.
 """
 from __future__ import annotations
 
+import json
 import re
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -267,19 +269,46 @@ class PostTest(unittest.TestCase):
     """The posting call itself, with gh stubbed out entirely."""
 
     def test_posts_a_comment_review_with_the_record_on_stdin(self):
-        proc = mock.Mock(returncode=0, stdout="https://github.com/o/r/pull/9#pullrequestreview-1\n",
-                         stderr="")
+        # Two calls now: the post, then the read-back that confirms the gate can
+        # see it. Assert on the post by position rather than on the last call.
+        post = mock.Mock(returncode=0, stdout="", stderr="")
+
+        def fake_run(argv, **kw):
+            if argv[:2] == ["gh", "api"]:
+                body = kw.get("input") or ""
+                return mock.Mock(returncode=0, stderr="", stdout=json.dumps(
+                    [{"commit_id": SHA, "body": post_body[0],
+                      "html_url": "https://github.com/o/r/pull/9#pullrequestreview-1",
+                      "id": 1}]))
+            post_body[0] = kw.get("input") or ""
+            return post
+
+        post_body = [""]
         with mock.patch.object(review, "current_head", return_value=SHA):
-            with mock.patch("hill_lib.review.subprocess.run", return_value=proc) as run:
+            with mock.patch("hill_lib.review.subprocess.run", side_effect=fake_run) as run:
                 res = review.submit(repo="o/r", pr=9, head=SHA, verdict="changes",
                                     agent=AGENT, body="one finding")
-        argv = run.call_args.args[0]
-        self.assertEqual(argv, ["gh", "pr", "review", "9", "--repo", "o/r",
-                                "--comment", "--body-file", "-"])
+        first = run.call_args_list[0]
+        self.assertEqual(first.args[0], ["gh", "pr", "review", "9", "--repo", "o/r",
+                                         "--comment", "--body-file", "-"])
         # The record goes in on stdin, not on the command line.
-        self.assertEqual(run.call_args.kwargs["input"], res["marker"])
+        self.assertEqual(first.kwargs["input"], res["marker"])
         self.assertTrue(res["ok"])
         self.assertEqual(res["url"], "https://github.com/o/r/pull/9#pullrequestreview-1")
+
+    def test_a_post_that_cannot_be_read_back_is_not_reported_as_ok(self):
+        # gh exits 0 but the review is not there (or not bound to this head).
+        # Reporting that as success is how a lost verdict becomes invisible.
+        def fake_run(argv, **kw):
+            if argv[:2] == ["gh", "api"]:
+                return mock.Mock(returncode=0, stdout="[]", stderr="")
+            return mock.Mock(returncode=0, stdout="", stderr="")
+
+        with mock.patch.object(review, "current_head", return_value=SHA):
+            with mock.patch("hill_lib.review.subprocess.run", side_effect=fake_run):
+                res = review.submit(repo="o/r", pr=9, head=SHA, verdict="accept", agent=AGENT)
+        self.assertFalse(res["ok"])
+        self.assertIn("no review bound to", res["stderr"])
 
     def test_a_failed_post_is_not_ok_and_keeps_stderr(self):
         proc = mock.Mock(returncode=1, stdout="", stderr="HTTP 403\n")
@@ -300,3 +329,46 @@ class PostTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PostedReviewLookupTests(unittest.TestCase):
+    """The tool must not report a landed verdict as a failure, or the reverse.
+
+    `gh pr review` prints nothing on success, so scraping stdout for a URL
+    always yielded null and made a verdict that did land read like one that
+    had not. The replacement re-reads the record and applies the gate's own
+    binding rule, so "ok" means the gate can see it.
+    """
+
+    HEAD = "a" * 40
+    OTHER = "b" * 40
+    TEXT = "**From:** opus-max\n\n**HEAD reviewed:** `%s`\n\n**Verdict:** accept\n" % HEAD
+
+    def find(self, reviews):
+        import unittest.mock as mock
+        payload = json.dumps(reviews)
+        completed = subprocess.CompletedProcess([], 0, stdout=payload, stderr="")
+        with mock.patch.object(subprocess, "run", return_value=completed):
+            return review._find_review("o/r", 1, self.HEAD, self.TEXT)
+
+    def test_finds_the_review_bound_to_this_head(self):
+        got = self.find([{"commit_id": self.HEAD, "body": self.TEXT, "html_url": "u", "id": 7}])
+        self.assertIsNotNone(got)
+        self.assertEqual(got["html_url"], "u")
+
+    def test_ignores_a_review_on_another_commit(self):
+        self.assertIsNone(self.find([{"commit_id": self.OTHER, "body": self.TEXT, "id": 7}]))
+
+    def test_ignores_someone_elses_review_on_this_head(self):
+        self.assertIsNone(self.find(
+            [{"commit_id": self.HEAD, "body": "**From:** astra\n\nlgtm", "id": 7}]))
+
+    def test_takes_the_latest_when_the_same_marker_appears_twice(self):
+        got = self.find([
+            {"commit_id": self.HEAD, "body": self.TEXT, "id": 1},
+            {"commit_id": self.HEAD, "body": self.TEXT, "id": 2},
+        ])
+        self.assertEqual(got["id"], 2)
+
+    def test_no_reviews_is_not_found_rather_than_an_error(self):
+        self.assertIsNone(self.find([]))

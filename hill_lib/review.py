@@ -23,6 +23,7 @@ instead of implying the binding was confirmed.
 """
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 
@@ -185,7 +186,38 @@ def submit(repo: str, pr: int, head: str, verdict: str, agent: str,
         return {"ok": False, "marker": text, "url": None,
                 "stderr": f"{type(exc).__name__}: {exc}", **extra}
 
-    url = re.search(r"https://\S+", proc.stdout or "")
-    return {"ok": proc.returncode == 0, "marker": text,
-            "url": url.group(0) if url else None,
-            "stderr": (proc.stderr or "").strip(), **extra}
+    if proc.returncode != 0:
+        return {"ok": False, "marker": text, "url": None,
+                "stderr": (proc.stderr or "").strip(), **extra}
+
+    # gh prints nothing on a successful review, so there is no URL to scrape --
+    # the old regex over stdout always produced null here and made a landed
+    # verdict read like a failed one. Read the record back instead: the verdict
+    # only counts if the gate can see it bound to this exact head, so confirming
+    # that is the same check the gate will make, not a cosmetic lookup.
+    posted = _find_review(repo, pr, head, text)
+    if posted is None:
+        return {"ok": False, "marker": text, "url": None,
+                "stderr": "gh reported success but no review bound to "
+                          f"{head} was found on re-read; check the pull request",
+                **extra}
+    return {"ok": True, "marker": text, "url": posted.get("html_url"),
+            "review_id": posted.get("id"), "stderr": "", **extra}
+
+
+def _find_review(repo, pr, head, text):
+    """The review we just posted, as the gate would see it: bound to this head."""
+    marker = text.strip().splitlines()[0].strip()
+    try:
+        out = subprocess.run(
+            ["gh", "api", f"repos/{repo}/pulls/{pr}/reviews", "--paginate"],
+            capture_output=True, text=True, timeout=_GH_TIMEOUT,
+        )
+        if out.returncode != 0:
+            return None
+        reviews = json.loads(out.stdout or "[]")
+    except Exception:
+        return None
+    hits = [r for r in reviews
+            if r.get("commit_id") == head and marker in (r.get("body") or "")]
+    return hits[-1] if hits else None
