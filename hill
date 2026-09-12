@@ -197,8 +197,13 @@ def cmd_review(args):
 def cmd_board(args):
     from hill_lib import collect, build
     snap = collect.collect()
-    path = build.render(snap, open_after=args.open)
+    path = build.render(snap, open_after=args.open, archive=args.archive)
     out({"board": str(path), "collected_at": snap.get("collected_at")}, args)
+
+
+def cmd_serve(args):
+    from hill_lib import server
+    server.serve(host=args.host, port=args.port, interval=args.interval)
 
 
 def main(argv=None):
@@ -272,9 +277,22 @@ def main(argv=None):
                         "(the gate will still bind the record to the new head)")
     s.set_defaults(fn=cmd_review)
 
-    s = sub.add_parser("board", parents=[common], help="collect a snapshot and build the dashboard")
-    s.add_argument("--open", action="store_true")
+    s = sub.add_parser("board", parents=[common],
+                       help="build the dashboard once, to a file")
+    s.add_argument("--open", action="store_true", help="open it when it is built")
+    s.add_argument("--archive", action="store_true",
+                   help="also keep this build under its own timestamp")
     s.set_defaults(fn=cmd_board)
+
+    s = sub.add_parser("serve", parents=[common],
+                       help="run the board as a live app that refreshes itself")
+    s.add_argument("--host", default="127.0.0.1",
+                   help="loopback by default; anything else exposes private "
+                        "repository state on your network")
+    s.add_argument("--port", type=int, default=8787)
+    s.add_argument("--interval", type=int, default=300,
+                   help="seconds between collections (minimum 60)")
+    s.set_defaults(fn=cmd_serve)
 
     args = p.parse_args(argv)
     return args.fn(args)

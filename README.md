@@ -1,8 +1,27 @@
 # the-hill
 
-Tools for running a team of AI agents across several repositories. One checkout
-per machine at `~/.the-hill`. There is no version number and no release
-process — `hill version` tells you when the checkout was last updated.
+**An app for running a software factory.**
+
+A team of agents is not a pool of assistants answering questions. It is a shift
+on a floor, working a mission: a body of software that has to get built,
+reviewed and shipped, by agents that come and go, across several repositories,
+without a human holding every thread.
+
+the-hill is what that shift runs on. It answers the questions a floor manager
+asks and nothing else:
+
+- What is every lane waiting on, and is that thing going to happen?
+- Who is working, who is stuck, who has gone quiet?
+- What shipped, what was refused, and by whom?
+- What on this machine is holding work nobody has saved?
+
+**The board is the point.** `hill serve` puts a live display on a screen — the
+real thing on a production floor, refreshing itself, stating how old it is,
+going amber when a refresh stops landing. Not a report someone remembers to
+run.
+
+One checkout per machine at `~/.the-hill`. There is no version number and no
+release process — `hill version` tells you when the checkout was last updated.
 
 > **This checkout has no git remote yet.** It is a local repository on one
 > machine, so there is nowhere to clone it from and `git pull` has nothing to
@@ -74,6 +93,27 @@ hill release blb-people#476      # give it back
 board. Liveness is a snapshot, not a history — if you stop ticking, the record
 goes stale and nobody can tell whether you are working or gone.
 
+## The roles
+
+A factory needs people who are accountable for different things, and an agent
+does whichever job its prompt tells it to. Those prompts live in
+[`docs/roles/`](docs/roles/):
+
+| Role | Accountable for |
+|---|---|
+| [steward](docs/roles/steward.md) | the board moving at all |
+| [builder](docs/roles/builder.md) | one lane, delivered and reviewable |
+| [reviewer](docs/roles/reviewer.md) | refusing work that is not ready |
+| [security](docs/roles/security.md) | what the other three would wave through |
+| [operator](docs/roles/operator.md) | the machine the factory runs on |
+
+Paste one at the top of an agent's instructions. They say what the role owns
+and where it must stop; they do not explain how to write code.
+
+Two rules bind every role, and most incidents come from breaking one of them:
+**never review your own lane**, and **say what you measured, not what you
+expect**.
+
 ## What it does and does not do
 
 the-hill **helps agents deliver**. It does not stand between you and a merge.
@@ -108,7 +148,8 @@ same question and they will disagree.
     hill cleanup                    show what could be removed (dry run)
     hill cleanup --apply            actually remove them
     hill review <repo> <pr> --head <sha> --verdict accept    post a verdict
-    hill board --open               build and open the dashboard
+    hill board --open               build one snapshot to a file
+    hill serve                      run the live board on localhost:8787
 
 Set `HILL_AGENT` once and you can drop `--agent`.
 
@@ -149,42 +190,58 @@ delivered work undelivered and a naive cleanup would then delete it.
 
 ## The board
 
+### Running it (what you want)
+
 ```bash
-hill board              # build it, print where it went
-hill board --open       # build it and open it in your browser
+hill serve                                  # http://localhost:8787
+hill serve --port 9000 --interval 120       # pick a port, refresh more often
 ```
 
-That is the whole thing. It writes **one self-contained HTML file** to
-`board/latest.html` — the data is inside the file, so there is no server to
-start, no port, and nothing to keep running. `--open` just hands the file to
-`xdg-open`; without it, open the printed path yourself, or double-click the
-file.
+A live app. Open it on a spare screen and leave it. It repaints itself every
+ten seconds and re-collects from GitHub every five minutes by default.
 
+Three things it does deliberately:
+
+**A request never waits on a collection.** One pass over every repository takes
+about two minutes. A background thread does that on its own schedule and the
+page is served instantly from the last finished pass. A board that hangs is
+not a board.
+
+**The page always says how old it is.** A strip under the masthead reads `live
+· 12s old`, turns amber when refreshes fall behind, and red with the reason
+when they stop landing. A wall display that quietly freezes is the worst thing
+in this repository, so it cannot happen silently.
+
+**It binds to loopback.** This reports on private repositories. `--host
+0.0.0.0` puts that on your network and says so when it starts.
+
+It serves exactly three routes — the page, `/api/board.json`, and `/healthz`.
+No path is ever turned into a file lookup.
+
+### Building one to a file
+
+```bash
+hill board --open          # one snapshot, written to board/latest.html
+hill board --archive       # also keep it under its own timestamp
 ```
-$ hill board
-{
- "board": "/home/you/.the-hill/board/latest.html",
- "collected_at": "2026-09-12T11:24:03+00:00"
-}
-```
 
-A build takes a couple of minutes — 107 seconds on this machine — because it
-reads every repository through `gh`.
-Each one is also kept under its own timestamp — `board/board-<when>.html` — so
-you can open an earlier snapshot and compare. They are git-ignored; delete them
-whenever you like.
+For mailing, attaching to an incident, or looking at the floor without a
+process running. The data is inlined, so the file works on its own with no
+server — and it labels itself **saved snapshot — not live**, because a
+photograph that looks like a live feed is the same lie in a different format.
 
-**What it shows:** every open lane and who it is waiting on, deliveries per
-day, per-agent accept/changes counts, workspaces on this machine, and GitHub
-API quota. It renders in your browser's light or dark theme.
+Archiving is opt-in: a directory filling with near-identical snapshots is not
+a record anyone reads.
 
-**What it does not do:** it never refreshes itself. A board is a photograph of
-the moment you built it, and `collected_at` in the corner says when that was.
-Build it again for a newer one.
+### What it shows
+
+Every open lane and who it is waiting on; deliveries per day; per-agent accept
+and changes-required counts; workspaces on this machine; GitHub API quota. It
+follows your browser's light or dark theme.
 
 Figures name their source. Where a source cannot answer, the board says
-"unknown" rather than showing zero — the distinction between *measured zero*
-and *not measured* is the whole reason to trust the rest of it.
+**unknown** rather than showing zero — the distinction between *measured zero*
+and *not measured* is the whole reason to trust anything else on the page.
 
 ## Tests
 

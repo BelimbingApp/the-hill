@@ -48,6 +48,18 @@ h1,h2,h3{color:var(--ink);margin:0;text-wrap:balance}
 .mast .meta{margin-left:auto;text-align:right;font-family:var(--mono);
   font-size:12px;color:var(--muted);line-height:1.7}
 .mast .meta b{color:var(--ink);font-weight:600}
+/* Age of what is on screen. A wall display is read from across a room, so the
+   state is a colour first and words second. */
+.live{display:inline-block;margin-top:6px;font-family:var(--display);
+  text-transform:uppercase;letter-spacing:.07em;font-size:11.5px;font-weight:600;
+  padding:2px 9px;border:1px solid currentColor;color:var(--unknown);
+  background:var(--unknown-wash)}
+.live.ok{color:var(--run);background:var(--run-wash)}
+.live.warm{color:var(--attn);background:var(--attn-wash)}
+.live.bad{color:var(--stop);background:var(--stop-wash)}
+@keyframes hillpulse{0%,100%{opacity:1}50%{opacity:.45}}
+.live.ok{animation:hillpulse 3.2s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.live.ok{animation:none}}
 
 /* the answer strip -------------------------------------------------------- */
 .answer{margin-top:22px;display:grid;grid-template-columns:auto 1fr;gap:20px;
@@ -192,9 +204,10 @@ footer code{font-family:var(--mono);color:var(--muted)}
   <header class="mast">
     <div>
       <h1>Hill Floor Board</h1>
-      <p class="sub">What every lane is waiting on, and since when. One snapshot, no live connection.</p>
+      <p class="sub" id="sub">What every lane is waiting on, and since when.</p>
     </div>
     <div class="meta" id="meta"></div>
+    <div class="meta"><span class="live" id="live">—</span></div>
   </header>
 
   <div class="answer" id="answer">
@@ -332,8 +345,13 @@ footer code{font-family:var(--mono);color:var(--muted)}
 </div>
 
 <script>
-const D = /*__DATA__*/null;
+// Embedded when built to a file, null when served by `hill serve` -- the
+// served page fetches instead, and repaints on a timer. One template either
+// way, so the floor display and the saved snapshot cannot drift apart.
+const EMBEDDED = /*__DATA__*/null;
 const $ = s => document.querySelector(s);
+
+function paint(D) {
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const ago = iso => {
   if (!iso) return "never";
@@ -543,15 +561,15 @@ function drill(i) {
   document.querySelectorAll("#agents tr").forEach(tr =>
     tr.setAttribute("aria-selected", tr.dataset.i === String(i)));
 }
-$("#agents").addEventListener("click", e => {
+$("#agents").onclick = e => {
   const tr = e.target.closest("tr"); if (tr) drill(+tr.dataset.i);
-});
-$("#agents").addEventListener("keydown", e => {
+};
+$("#agents").onkeydown = e => {
   if (e.key === "Enter" || e.key === " ") {
     const tr = e.target.closest("tr");
     if (tr) { e.preventDefault(); drill(+tr.dataset.i); }
   }
-});
+};
 drill(0);
 
 /* workspaces --------------------------------------------------------------- */
@@ -661,8 +679,64 @@ $("#wsNote").textContent =
       `plan does not charge that way, so treat it as the scale of the work, not an invoice. ` +
       `Covers Claude Code sessions on this machine only — ${U.not_covered}.`;
   }
-  $("#rates").addEventListener("input", render);
+  $("#rates").oninput = render;
   render();
 })();
+}
+
+/* live mode ---------------------------------------------------------------- */
+// A board on a wall has to say how old it is. Silence reading as "current" is
+// the failure this whole tool exists to avoid, so the strip states the age of
+// what is on screen and turns amber the moment a refresh stops landing.
+function liveStatus(meta, error) {
+  const el = $("#live");
+  if (!el) return;
+  if (error) {
+    el.className = "live bad";
+    el.textContent = `refresh failing (${error}) — showing data from ` +
+      (meta && meta.collected_at ? new Date(meta.collected_at).toLocaleTimeString() : "an earlier collection");
+    return;
+  }
+  if (meta.collecting && !meta.snapshot) {
+    el.className = "live warm";
+    el.textContent = "first collection running — this takes about two minutes";
+    return;
+  }
+  const age = Math.max(0, Math.round(meta.age_seconds));
+  el.className = "live" + (age > meta.interval_seconds * 2 ? " warm" : " ok");
+  el.textContent = (meta.collecting ? "refreshing · " : "live · ") +
+    (age < 90 ? `${age}s old` : `${Math.round(age / 60)}m old`);
+}
+
+if (EMBEDDED) {
+  paint(EMBEDDED);
+  const el = $("#live");
+  if (el) { el.className = "live"; el.textContent = "saved snapshot — not live"; }
+  // Said once, here, rather than baked into the markup: the same file is now
+  // served live, and a fixed subtitle claiming "no live connection" was wrong
+  // on exactly the page people will spend the most time looking at.
+  $("#sub").textContent =
+    "What every lane is waiting on, and since when. A saved snapshot — "
+    + "it does not update. Run `hill serve` for the live board.";
+} else {
+  $("#sub").textContent =
+    "What every lane is waiting on, and since when. Live — this page refreshes "
+    + "itself and states the age of what you are reading.";
+  let last = null;
+  const pull = async () => {
+    try {
+      const r = await fetch("api/board.json", {cache: "no-store"});
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      last = j;
+      if (j.snapshot) paint(j.snapshot);
+      liveStatus(j, null);
+    } catch (e) {
+      liveStatus(last, e.message || "unreachable");
+    }
+  };
+  pull();
+  setInterval(pull, 10000);
+}
 
 </script>
