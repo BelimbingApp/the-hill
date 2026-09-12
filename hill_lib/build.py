@@ -22,15 +22,33 @@ from . import db
 
 BOARD = db.HOME / "board"
 TEMPLATE = Path(__file__).with_name("template.html")
+STYLES = Path(__file__).with_name("board.css")
+SCRIPT = Path(__file__).with_name("board.js")
 PLACEHOLDER = "/*__DATA__*/null"
+
+
+def assemble() -> str:
+    """The page with its stylesheet and script inlined.
+
+    They live in board.css and board.js so they can be edited as CSS and
+    JavaScript rather than as strings inside HTML, and are folded back in here
+    because a saved board must work from file:// with nothing running -- a
+    browser will not let a local page read its neighbours.
+    """
+    page = TEMPLATE.read_text()
+    for mark, path in (("/*__CSS__*/", STYLES), ("/*__JS__*/", SCRIPT)):
+        if mark not in page:
+            raise RuntimeError(f"{TEMPLATE} has no {mark} to fill")
+        page = page.replace(mark, path.read_text(), 1)
+    if PLACEHOLDER not in page:
+        raise RuntimeError(f"{SCRIPT} has no {PLACEHOLDER} to fill")
+    return page
 
 
 def render(snap: dict, open_after: bool = False, archive: bool = False) -> Path:
     BOARD.mkdir(parents=True, exist_ok=True)
-    tpl = TEMPLATE.read_text()
-    if PLACEHOLDER not in tpl:
-        raise RuntimeError(f"{TEMPLATE} has no {PLACEHOLDER} to fill")
-    html = tpl.replace(PLACEHOLDER, json.dumps(snap, separators=(",", ":"), default=str))
+    html = assemble().replace(
+        PLACEHOLDER, json.dumps(snap, separators=(",", ":"), default=str))
 
     latest = BOARD / "latest.html"
     latest.write_text(html)

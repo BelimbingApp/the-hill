@@ -96,3 +96,49 @@ class HeadVerdictTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AssemblyTest(unittest.TestCase):
+    """The page is three files folded into one, and both modes must fold the same.
+
+    The stylesheet and script live outside the HTML so they can be edited as
+    CSS and JavaScript. They are inlined at build time because a saved board
+    has to work from file:// with nothing running, and a browser will not let
+    a local page read its neighbours. If the saved and served pages ever
+    assemble differently, the file stops being a faithful copy of the board.
+    """
+
+    def test_every_marker_is_filled(self):
+        from hill_lib import build
+        page = build.assemble()
+        for marker in ("/*__CSS__*/", "/*__JS__*/"):
+            self.assertNotIn(marker, page, f"{marker} was left unfilled")
+        self.assertIn(build.PLACEHOLDER, page, "the data placeholder must survive")
+
+    def test_the_stylesheet_and_script_actually_arrive(self):
+        from hill_lib import build
+        page = build.assemble()
+        self.assertIn("function paint(D)", page)
+        self.assertIn(".chip{", page)
+
+    def test_a_missing_marker_is_an_error_not_a_silent_half_page(self):
+        from hill_lib import build
+        from unittest import mock
+        # The fixture carries the DATA placeholder but not the CSS/JS markers,
+        # so only the marker check can catch it. An earlier version used a
+        # template with nothing in it at all, and the placeholder check fired
+        # instead -- the test passed with the marker check deleted.
+        class Fake:
+            @staticmethod
+            def read_text(*a, **k):
+                return "<html>/*__DATA__*/null</html>"
+
+        with mock.patch.object(build, "TEMPLATE", Fake):
+            with self.assertRaises(RuntimeError):
+                build.assemble()
+
+    def test_saved_and_served_share_one_assembly(self):
+        # Not two code paths that happen to agree today.
+        import inspect
+        from hill_lib import server
+        self.assertIn("build.assemble()", inspect.getsource(server.serve))

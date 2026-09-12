@@ -22,7 +22,7 @@ human owners             one or more humans; start the mission; only they can ha
 - **Section Manager** — are my agents working? Is my harness's failure staying inside my harness?
   - A Section Manager can sit on another machine. That machine's human can halt that section; they cannot halt the run.
   - If the Factory Manager is MIA (no action in more than one hour), a Section Manager can take over that job until they return. Say so on the board.
-  - Note: the tool cannot yet show one peer another peer's agents. See *Not built yet*.
+  - Peers see each other through work on GitHub, not a heartbeat. `hill who` is this machine; the board is the floor.
 - **Builder** — one lane, finished so someone else can review it.
 - **Reviewer** — refuse work that is not ready.
 - **Security** — find what the others would wave through.

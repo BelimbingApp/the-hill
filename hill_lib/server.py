@@ -164,12 +164,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(host: str = "127.0.0.1", port: int = 8787, interval: int = 300) -> None:
-    page = TEMPLATE.read_text()
-    if PLACEHOLDER not in page:
-        raise RuntimeError(f"{TEMPLATE} has no {PLACEHOLDER} to fill")
-    # Served with no data inlined: that is what tells the page to fetch and
-    # repaint instead of rendering once.
-    page = page.replace(PLACEHOLDER, "null")
+    # Same assembly as a saved board, so the served page and the file cannot
+    # drift apart: one template, one stylesheet, one script. Served with no
+    # data inlined, which is what tells the page to fetch and repaint instead
+    # of rendering once.
+    page = build.assemble().replace(PLACEHOLDER, "null")
 
     # Bind before starting the collector: a failed bind used to surface as a
     # bare OSError traceback *after* a two-minute collection had already begun,
