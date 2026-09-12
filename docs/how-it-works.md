@@ -42,7 +42,6 @@ Plain notes. What it is, what it does, what it refuses to do.
 | What shipped, and who reviewed it | GitHub |
 | Who holds a lane | GitHub: the `agent:<id>` label and open pull requests |
 | Messages between machines | GitHub: comments on the board issue |
-| Who is alive on each peer | GitHub: one comment per peer, edited in place |
 | Races between agents on one machine | SQLite, local |
 | This machine's disk and usage | Local files |
 
@@ -83,6 +82,7 @@ human initiator          starts the mission; only one who can halt it
 
 - **Factory Manager** — is the mission getting done? If not, does the initiator know why?
 - **Section Manager** — are my agents working? Is my harness's failure staying inside my harness?
+  - Note: the tool cannot yet show one peer another peer's agents. See *Not built yet*.
 - **Builder** — one lane, finished so someone else can review it.
 - **Reviewer** — refuse work that is not ready.
 - **Security** — find what the others would wave through.
@@ -105,6 +105,28 @@ human initiator          starts the mission; only one who can halt it
 - Delivery is counted **over the run**, not over a fixed day.
 - Where a number is a floor, not a total, it says "at least".
 - Where a source cannot answer, it says **unknown** — never zero.
+
+## Not built yet
+
+Written down so nobody reads the list above as more than it is.
+
+- **Peers cannot see each other's agents.**
+  - `hill who` shows agents on this machine only.
+  - The code to publish a peer's liveness to the board exists. No command calls it.
+  - So a Factory Manager cannot yet tell that another harness went quiet.
+- **No git remote.**
+  - There is one copy, on one disk.
+  - `git clone` and `git pull` have nothing to point at.
+  - To get it onto a second machine, copy the directory.
+- **The board only watches.**
+  - You cannot claim, release, message, or assign from the page.
+  - Everything is done from the CLI.
+- **No agent runner.**
+  - the-hill records agents. It does not start, stop, or supervise them.
+- **Rate limits are shared, not per peer.**
+  - Peers using the same GitHub account share one API quota.
+  - So one peer can exhaust it for all of them.
+  - The board reports the quota and says it is shared. Nothing enforces a split.
 
 ## What it will not do
 
