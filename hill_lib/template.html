@@ -352,7 +352,7 @@ $("#meta").innerHTML =
 
 const openLanes = D.open_lanes.length;
 const halts = D.halts.length;
-const waiting = D.open_lanes.filter(l => l.waiting_on !== "nothing — landable").length;
+const waiting = D.open_lanes.filter(l => l.waiting_on !== "landable").length;
 const ans = $("#answer");
 if (halts) {
   ans.classList.add("halt");
@@ -375,7 +375,10 @@ if (halts) {
 // person has to act. "a reviewer" is amber, not red — nobody has done anything
 // wrong, the lane is simply queued behind review capacity.
 function laneChip(w) {
-  if (w.startsWith("nothing")) return "clear";
+  if (w === "landable") return "clear";
+  // Landable with nobody having read it is not a green state. It is the one
+  // an author is most likely to merge themselves.
+  if (w.startsWith("landable")) return "hold";
   if (w === "CI" || w.startsWith("gate disagrees")) return "stop";
   if (w === "CI (running)" || w === "unknown") return "idle";
   return "hold";

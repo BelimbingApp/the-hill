@@ -66,7 +66,7 @@ def waiting_on(draft, red, pending, mergeable_state, head_verdict_):
     if mergeable_state == "blocked":
         return "human (approval)"
     if mergeable_state == "clean":
-        return "nothing — landable"
+        return "landable" if head_verdict_ == "accept" else "landable — no verdict"
     return "unknown"
 
 
@@ -133,8 +133,11 @@ def collect():
             ms = det.get("mergeable_state") or "unknown"
             updated = pr["updated_at"]
             age_h = round((now - datetime.datetime.fromisoformat(updated.replace("Z", "+00:00"))).total_seconds() / 3600, 1)
-            hv = (head_verdict(gh, full, pr["number"], sha, agent)
-                  if GATE_CHECK in red else None)
+            # Computed for every open lane, not only gate-red ones: a repo that
+            # never installed the review gate reports mergeable and clean with
+            # nobody having read the work, which is the one state most likely to
+            # get a PR merged by its own author.
+            hv = head_verdict(gh, full, pr["number"], sha, agent)
             waiting = waiting_on(pr.get("draft", False), red, pending, ms, hv)
             snap["open_lanes"].append({
                 "repo": short, "number": pr["number"],
@@ -336,7 +339,9 @@ def collect():
                  "The head-verdict scan is NOT review_gate.sh: it ignores carry-forward across a clean base "
                  "merge, finding-test clearance, and unbound approvals, so the gate can and does overrule it"},
       {"signal": "landable", "checks": "mergeable_state == clean AND no red checks",
-       "not_checked": "the AI Team review gate — a PR can be clean here and refused by review_gate.sh"},
+       "not_checked": "the AI Team review gate — a PR can be clean here and refused by review_gate.sh. "
+                  "'no verdict' means no non-author verdict is bound to this head, which is not the same as "
+                  "the repo requiring one: blb-people-connector installs no gate and requires 0 approvals"},
       {"signal": "merged counts", "checks": "merged_at on the most recent 100 closed PRs per repo",
        "not_checked": "anything older than that window; unlabelled PRs are grouped, not attributed"},
       {"signal": "verdicts", "checks": "**From:**/**Verdict:** markers on reviews of the 25 most recent merges per repo",

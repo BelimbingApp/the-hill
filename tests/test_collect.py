@@ -46,8 +46,14 @@ class WaitingOnTests(unittest.TestCase):
         self.assertEqual(waiting_on(True, [GATE_CHECK, "ci / sqlite"], [], "blocked", None),
                          "author (draft)")
 
-    def test_clean_and_quiet_is_landable(self):
-        self.assertEqual(waiting_on(False, [], [], "clean", None), "nothing — landable")
+    def test_clean_with_an_accepted_head_is_landable(self):
+        self.assertEqual(waiting_on(False, [], [], "clean", "accept"), "landable")
+
+    def test_clean_but_unread_says_so(self):
+        # blb-people-connector installs no review gate and requires 0 approvals,
+        # so a PR reaches clean with nobody having read it. Calling that plain
+        # "landable" invites the author to merge their own work.
+        self.assertEqual(waiting_on(False, [], [], "clean", None), "landable — no verdict")
 
 
 class HeadVerdictTests(unittest.TestCase):
