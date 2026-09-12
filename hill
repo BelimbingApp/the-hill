@@ -171,7 +171,8 @@ def cmd_review(args):
     if args.body_file:
         body = Path(args.body_file).read_text() if args.body_file != "-" else sys.stdin.read()
     res = review.submit(repo=args.repo, pr=args.pr, head=args.head, verdict=args.verdict,
-                        agent=agent_id(args), body=body, dry_run=args.dry_run)
+                        agent=agent_id(args), body=body, dry_run=args.dry_run,
+                        force=args.force)
     out(res, args)
 
 
@@ -248,6 +249,9 @@ def main(argv=None):
     s.add_argument("--head", required=True); s.add_argument("--verdict", required=True,
                                                             choices=["accept", "changes"])
     s.add_argument("--body-file"); s.add_argument("--dry-run", action="store_true")
+    s.add_argument("--force", action="store_true",
+                   help="post even if the PR head has moved since you reviewed it "
+                        "(the gate will still bind the record to the new head)")
     s.set_defaults(fn=cmd_review)
 
     s = sub.add_parser("board", parents=[common], help="collect a snapshot and build the dashboard")

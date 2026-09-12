@@ -188,6 +188,22 @@ footer code{font-family:var(--mono);color:var(--muted)}
 
   <div class="stats" id="stats"></div>
 
+  <section id="crewSec" hidden>
+    <div class="head">
+      <h2>Crew and lanes</h2>
+      <span class="note" id="crewNote"></span>
+    </div>
+    <div class="tbl" style="max-height:none">
+      <table>
+        <thead><tr>
+          <th>Agent</th><th>Freshness</th><th class="r">Last tick</th>
+          <th>Holds</th><th class="r">Unread</th>
+        </tr></thead>
+        <tbody id="crew"></tbody>
+      </table>
+    </div>
+  </section>
+
   <section>
     <div class="head">
       <h2>Deliveries per day</h2>
@@ -479,6 +495,35 @@ $("#ws").innerHTML = ws.map(w => `
   </tr>`).join("");
 $("#wsNote").textContent =
   `${ws.length} checkouts · ${gb} GB · ${dirty} hold uncommitted work and must not be cleaned automatically`;
+
+/* crew: the-hill's own state ----------------------------------------------- */
+(() => {
+  const H = D.hill; if (!H) return;
+  const byAgent = {};
+  (H.live || []).forEach(r => byAgent[r.agent] = {...r});
+  (H.claims || []).forEach(c => {
+    byAgent[c.agent] = byAgent[c.agent] || {agent: c.agent, freshness: "no tick", age_s: null};
+    (byAgent[c.agent].holds = byAgent[c.agent].holds || []).push(c.key);
+  });
+  const rows = Object.values(byAgent);
+  if (!rows.length) return;                      // nothing local yet; stay hidden
+  document.getElementById("crewSec").hidden = false;
+  const pill = f => {
+    const col = f === "fresh" ? "var(--run)" : f === "stale" ? "var(--stop)" : "var(--attn)";
+    return `<span class="chip" style="color:${col};background:var(--surface)">${esc(f)}</span>`;
+  };
+  $("#crew").innerHTML = rows.map(r => `
+    <tr style="cursor:default">
+      <td class="who">${esc(r.agent)}</td>
+      <td>${pill(r.freshness || "no tick")}</td>
+      <td class="num r">${r.age_s == null ? "—" : r.age_s + "s"}</td>
+      <td class="path">${(r.holds || []).map(esc).join(", ") || "—"}</td>
+      <td class="num r">${(H.unread_by_agent || {})[r.agent] || "·"}</td>
+    </tr>`).join("");
+  $("#crewNote").textContent =
+    `${(H.claims || []).length} lane(s) claimed · ${(H.live || []).length} agent(s) ticked · `
+    + `a stale tick means unknown, not stopped`;
+})();
 
 /* time and usage ----------------------------------------------------------- */
 (() => {

@@ -13,6 +13,9 @@ says "unknown" (ai-team#128).
 import json, subprocess, datetime, os, re, sys
 from collections import defaultdict
 
+from . import db as _db
+from . import live as _live
+
 REPOS = ["BelimbingApp/blb-people", "BelimbingApp/ai-team",
          "BelimbingApp/belimbing", "BelimbingApp/blb-people-connector",
          "SB-Tape/blb-sbg"]
@@ -281,6 +284,30 @@ def collect():
       {"signal": "model quota", "checks": "nothing",
        "not_checked": "everything — reported as unknown rather than zero"},
     ]
+
+    # ---- the-hill's own state: the part GitHub cannot answer ----------------
+    # Who holds which lane, who has ticked, what is unread. This is the
+    # "waiting on whom" that a delivery record has no way to know.
+    try:
+        con = _db.connect()
+        held = _db.claims(con)
+        unread = {r[0]: r[1] for r in con.execute(
+            """SELECT m.recipient, COUNT(*) FROM messages m
+               WHERE NOT EXISTS (SELECT 1 FROM message_reads r
+                                 WHERE r.message_id=m.id AND r.agent=m.recipient)
+               GROUP BY m.recipient""")}
+        snap["hill"] = {
+            "claims": held,
+            "live": _live.read_all(),
+            "unread_by_agent": unread,
+            "events": _db.events(con, 30),
+            "source": "the-hill state on this machine",
+        }
+    except Exception as e:
+        # A collector failure must never look like an empty board.
+        snap["hill"] = {"error": f"{type(e).__name__}: {e}", "claims": [], "live": [],
+                        "unread_by_agent": {}, "events": []}
+
 
     return snap
 
