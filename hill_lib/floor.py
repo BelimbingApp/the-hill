@@ -121,3 +121,50 @@ def holders(repo: str, number: int) -> dict:
 
     return {"repo": repo, "number": number, "state": issue.get("state"),
             "holders": {a: sorted(set(w)) for a, w in found.items()}}
+
+
+def lanes(repos: list[str] | None = None) -> dict:
+    """Every lane the shared floor says is held, across the configured repos.
+
+    `hill claims` used to answer from SQLite alone, which is this machine's
+    opinion presented as the floor's. On a second host it shows an empty board
+    that is not empty -- the same defect the claim path had.
+
+    Partial is reported, never silently dropped: a repository that cannot be
+    read appears under `unreachable` rather than contributing nothing and
+    looking quiet.
+    """
+    if repos is None:
+        from .collect import REPOS
+        repos = REPOS
+
+    held: list[dict] = []
+    unreachable: list[dict] = []
+    for repo in repos:
+        try:
+            prs = json.loads(_gh(["pr", "list", "--repo", repo, "--state", "open",
+                                  "--limit", "100", "--json",
+                                  "number,title,labels,url"]) or "[]")
+            issues = json.loads(_gh(["issue", "list", "--repo", repo, "--state", "open",
+                                     "--limit", "100", "--json",
+                                     "number,title,labels,url"]) or "[]")
+        except Unreachable as exc:
+            unreachable.append({"repo": repo, "why": str(exc)})
+            continue
+        for kind, rows in (("pr", prs), ("issue", issues)):
+            for row in rows:
+                agents = _agent_labels(row.get("labels"))
+                if not agents:
+                    continue
+                held.append({
+                    "repo": repo, "kind": kind, "number": row.get("number"),
+                    "agents": agents, "url": row.get("url"),
+                    "title": (row.get("title") or "")[:70],
+                    "task": sorted(
+                        (label["name"] if isinstance(label, dict) else str(label))
+                        for label in row.get("labels") or []
+                        if str(label["name"] if isinstance(label, dict) else label)
+                        .startswith("task:")),
+                })
+    held.sort(key=lambda r: (r["repo"], r["number"]))
+    return {"held": held, "unreachable": unreachable, "repos": list(repos)}

@@ -142,13 +142,40 @@ def cmd_release(args):
 def cmd_claims(args):
     con = db.connect()
     rows = db.claims(con)
+
+    # SQLite knows what this host claimed. It cannot know what another machine
+    # claimed, so printing it alone answers "what is held?" with one host's
+    # opinion -- on a second machine, an empty board that is not empty.
+    floor_state = None
+    if not args.local:
+        from hill_lib import floor
+        floor_state = floor.lanes()
+
     if args.json:
-        return out(rows, args)
+        return out({"local": rows, "floor": floor_state}, args)
+
+    print("this machine:")
     if not rows:
-        print("no lanes claimed")
+        print("  nothing claimed here")
     for c in rows:
-        print(f"  {c['key']:<28} {c['agent']:<20} since {c['claimed_at']}"
+        print(f"  {c['key']:<30} {c['agent']:<18} since {c['claimed_at']}"
               + (f"  — {c['note']}" if c["note"] else ""))
+
+    if floor_state is None:
+        print("\nshared floor: not checked (--local)")
+        return
+    print("\nshared floor:")
+    if not floor_state["held"]:
+        print("  no lane carries an agent label")
+    for lane in floor_state["held"]:
+        who = ", ".join(lane["agents"])
+        task = (" " + " ".join(lane["task"])) if lane["task"] else ""
+        print(f"  {lane['repo']}#{lane['number']:<6} {who:<18} {lane['kind']}{task}")
+        print(f"      {lane['title']}")
+    for bad in floor_state["unreachable"]:
+        # Named, not dropped: a repository that could not be read must not look
+        # like a repository with nothing on it.
+        print(f"  {bad['repo']}: could not read — {bad['why']}")
 
 
 def cmd_send(args):
@@ -290,7 +317,11 @@ def main(argv=None):
     s.add_argument("key"); s.add_argument("--force", action="store_true")
     s.set_defaults(fn=cmd_release)
 
-    s = sub.add_parser("claims", parents=[common], help="lanes currently held")
+    s = sub.add_parser("claims", parents=[common],
+                       help="lanes held here and on the shared floor")
+    s.add_argument("--local", action="store_true",
+                   help="this machine only; the shared floor then reads as "
+                        "unchecked, not empty")
     s.set_defaults(fn=cmd_claims)
 
     s = sub.add_parser("send", parents=[common], help="queue a message for another agent")

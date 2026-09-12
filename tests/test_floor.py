@@ -124,3 +124,54 @@ class UnreachableTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LanesTest(unittest.TestCase):
+    """The whole floor, for `hill claims`.
+
+    It answered from SQLite alone, which is this machine's opinion presented as
+    the floor's: on a second host, an empty board that is not empty.
+    """
+
+    def lanes(self, per_repo):
+        calls = {"n": 0}
+
+        def fake(args):
+            repo = args[args.index("--repo") + 1]
+            rows = per_repo.get(repo)
+            if rows is None:
+                raise floor.Unreachable("HTTP 404")
+            calls["n"] += 1
+            # pr list first, then issue list
+            return json.dumps(rows["pr"] if args[0] == "pr" else rows["issue"])
+
+        with mock.patch.object(floor, "_gh", side_effect=fake):
+            return floor.lanes(list(per_repo))
+
+    def row(self, number, labels, title="t"):
+        return {"number": number, "title": title,
+                "labels": [{"name": n} for n in labels], "url": f"u/{number}"}
+
+    def test_only_lanes_carrying_an_agent_label_are_held(self):
+        got = self.lanes({"Owner/a": {"pr": [self.row(1, ["agent:astra", "task:review"])],
+                                      "issue": [self.row(2, ["task:ready"])]}})
+        self.assertEqual([(l["number"], l["agents"]) for l in got["held"]], [(1, ["astra"])])
+
+    def test_task_labels_travel_with_the_lane(self):
+        got = self.lanes({"Owner/a": {"pr": [self.row(1, ["agent:astra", "task:review"])],
+                                      "issue": []}})
+        self.assertEqual(got["held"][0]["task"], ["task:review"])
+
+    def test_a_repository_that_cannot_be_read_is_named_not_dropped(self):
+        # Silently contributing nothing would make an unreadable repository
+        # look like a quiet one, which is the failure this whole module exists
+        # to avoid.
+        got = self.lanes({"Owner/a": {"pr": [self.row(1, ["agent:astra"])], "issue": []},
+                          "Owner/gone": None})
+        self.assertEqual([u["repo"] for u in got["unreachable"]], ["Owner/gone"])
+        self.assertEqual(len(got["held"]), 1, "the readable repository still reports")
+
+    def test_lanes_are_ordered_so_two_runs_read_the_same(self):
+        got = self.lanes({"Owner/a": {"pr": [self.row(9, ["agent:x"]), self.row(2, ["agent:y"])],
+                                      "issue": []}})
+        self.assertEqual([l["number"] for l in got["held"]], [2, 9])
