@@ -136,10 +136,6 @@ human owners             one or more humans; start the mission; only they can ha
 
 Written down so nobody reads the list above as more than it is.
 
-- **No git remote.**
-  - There is one copy, on one disk.
-  - `git clone` and `git pull` have nothing to point at.
-  - To get it onto a second machine, copy the directory.
 - **The board only watches.**
   - You cannot claim, release, message, or assign from the page.
   - Everything is done from the CLI.
