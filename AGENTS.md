@@ -202,5 +202,7 @@ misreported something real. If you change behaviour, break it on purpose
 afterwards and check a named test goes red — a test that survives its own
 mutation is decoration.
 
-This checkout has **no git remote**. There is nowhere to push and nothing to
-pull; `git remote -v` tells you whether that is still true.
+The checkout and this machine's state are separate directories: the source
+lives wherever you cloned it, and `~/.hill` (override with `HILL_HOME`) holds
+claims, messages, liveness and built boards. `hill version` prints both.
+Re-cloning the source never destroys what this machine knew.

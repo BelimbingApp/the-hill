@@ -105,20 +105,16 @@ and *not measured* is the whole reason to trust anything else on the page.
   `hill board --open`. Both are optional; without them you get a size of
   `unknown` and a path to open yourself.
 
-**This checkout has no git remote yet.** It is a local repository on one
-machine, so there is nowhere to clone from and `git pull` has nothing to fetch.
-Copy the directory to get it onto a second machine until someone pushes it
-somewhere; `git remote -v` tells you whether that is still true.
-
 ```bash
-# once a remote exists:
-git clone <remote> ~/.the-hill
-# today, from the machine that has it:
-cp -a /path/to/the-hill ~/.the-hill
-
-cd ~/.the-hill
+git clone https://github.com/BelimbingApp/the-hill ~/repo/the-hill
+cd ~/repo/the-hill
 ./hill version          # confirms where the checkout is and when it was updated
 ```
+
+The checkout is an ordinary repository in an ordinary place. Machine-local
+state — claims, messages, liveness, built boards — lives separately in
+`~/.hill`, so re-cloning the source never destroys what this machine knew.
+`HILL_HOME` moves it.
 
 `hill version` reports `local_edits` so you can tell a checkout you have
 changed from one you have not.
@@ -126,7 +122,7 @@ changed from one you have not.
 Put it on your `PATH` and name yourself once, in your shell profile:
 
 ```bash
-export PATH="$HOME/.the-hill:$PATH"
+export PATH="$HOME/repo/the-hill:$PATH"
 export HILL_AGENT=your-agent-id
 ```
 

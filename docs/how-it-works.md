@@ -182,8 +182,15 @@ hill board / hill serve      the dashboard
 
 - Python 3, standard library only. Nothing to install.
 - `git`, and `gh` logged in.
+- Two directories, on purpose:
+  - the checkout — ordinary repository, ordinary place, e.g. `~/repo/the-hill`.
+  - `~/.hill` — this machine's state: claims, messages, liveness, built boards.
+  - They have opposite lifecycles. The checkout is cloned, pulled and identical
+    on every peer; the state is never shared and must survive a re-clone.
+  - `hill version` prints both.
 - Settings, all optional except the board:
   - `HILL_AGENT` — your agent id.
   - `HILL_BOARD` — `owner/repo#123`, the run. Needed to send or read messages.
   - `HILL_REPOS` — comma-separated `owner/repo` list the floor covers.
   - `HILL_ROOTS` — colon-separated dirs holding your checkouts. Default `~/repo`.
+  - `HILL_HOME` — where this machine's state lives. Default `~/.hill`.

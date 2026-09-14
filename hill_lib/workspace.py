@@ -34,7 +34,7 @@ from pathlib import Path
 
 from . import db
 
-# ~/.the-hill/worktrees is where new agent worktrees are meant to go; ~/repo is
+# The state root's worktrees/ is where new agent worktrees are meant to go; ~/repo is
 # the layout that already exists and holds most of the 31.
 WORKTREE_ROOT = db.HOME / "worktrees"
 REPO_ROOT = Path.home() / "repo"
@@ -136,7 +136,7 @@ def _checkouts(roots: list[Path] | None) -> list[Path]:
     """Every checkout under the given roots, in a stable order.
 
     A root is either a checkout itself (~/repo/bilimbi) or a directory holding
-    checkouts (~/.the-hill/worktrees, and the per-agent clone roots such as
+    checkouts (the state root's worktrees/, and the per-agent clone roots such as
     ~/repo/opus-max, which is where most of them live). Only one level down:
     deeper recursion would walk into vendor/ and node_modules/ of every
     workspace for no gain — the worktrees further down are found by asking git

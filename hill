@@ -53,7 +53,11 @@ def cmd_version(args):
                                capture_output=True, text=True, timeout=10).stdout.strip()
     except Exception:
         when, dirty = "", ""
-    out({"home": str(root), "updated": when or "unknown",
+    # Two places now, and naming only one of them hides the split that matters:
+    # the checkout is shared and re-clonable, the state root is this machine's
+    # and must survive that.
+    out({"checkout": str(root), "state": str(db.HOME),
+         "updated": when or "unknown",
          "local_edits": bool(dirty),
          "note": "datetime identifies the update, not the bytes; two machines "
                  "showing the same time may still differ"}, args)

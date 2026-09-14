@@ -21,7 +21,12 @@ import sqlite3
 import datetime
 from pathlib import Path
 
-HOME = Path(os.environ.get("HILL_HOME", Path.home() / ".the-hill"))
+# Machine-local state, deliberately NOT inside the checkout. Source and state
+# have opposite lifecycles: the checkout is cloned, pulled and identical on
+# every peer, while state/ live/ board/ are never shared and must survive a
+# re-clone. Keeping them in one directory meant `rm -rf` and clone again
+# silently destroyed this machine's claims, messages and liveness.
+HOME = Path(os.environ.get("HILL_HOME", Path.home() / ".hill"))
 STATE = HOME / "state"
 DB_PATH = STATE / "hill.db"
 
